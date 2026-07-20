@@ -1,0 +1,10 @@
+robot:
+  model: "myCobot320PI"
+  mode: "mock"
+  port: "/dev/ttyAMA0"
+  baudrate: 1000000
+  default_speed: 35
+  handover_coords: [80.0, -220.0, 180.0, 0.0, 0.0, 0.0]
+  gripper:
+    open_value: 80
+    close_value: 20

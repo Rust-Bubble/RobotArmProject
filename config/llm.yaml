@@ -1,0 +1,5 @@
+llm:
+  mode: "mock"
+  request_timeout_s: 8
+  endpoint: ""
+  model_name: ""
