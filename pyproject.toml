@@ -3,4 +3,7 @@ name = "qiming-smart-hand"
 version = "0.1.0"
 description = "MLLM-based assistive robotic arm framework for visually impaired users."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "langchain>=1.3.14",
+    "langchain-openai>=1.4.1",
+]
