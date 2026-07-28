@@ -1,0 +1,26 @@
+# Virtual environments
+.venv/
+venv/
+robot-arm-env/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Database config (contains passwords)
+config/database.yaml
+config/database.local.yaml
+
+# IDE
+.vscode/
+.idea/
+
+# Logs / data
+data/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
