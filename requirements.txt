@@ -1,2 +1,6 @@
 pymycobot>=3.6.0
 pyyaml>=6.0.0
+fastapi>=0.100.0
+httpx>=0.24.0
+python-multipart>=0.0.6
+uvicorn[standard]>=0.23.0

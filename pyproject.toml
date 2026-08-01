@@ -3,4 +3,9 @@ name = "qiming-smart-hand"
 version = "0.1.0"
 description = "MLLM-based assistive robotic arm framework for visually impaired users."
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "fastapi>=0.100.0",
+    "httpx>=0.24.0",
+    "python-multipart>=0.0.6",
+    "uvicorn[standard]>=0.23.0",
+]

@@ -116,6 +116,15 @@ a:focus-visible {
   border-radius: 50%;
 }
 
+.connection.unconfigured i,
+.connection.checking i {
+  background: #d49a42;
+}
+
+.connection.offline i {
+  background: #c45a45;
+}
+
 .emergency {
   gap: 6px;
   padding: 0;
@@ -253,6 +262,19 @@ a:focus-visible {
   color: var(--muted);
 }
 
+.transcript-copy {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.error-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #a14629;
+}
+
 .listening-line {
   display: flex;
   align-items: center;
@@ -319,6 +341,16 @@ a:focus-visible {
   animation-delay: calc(var(--i) * -55ms);
 }
 
+.voice-composer.transcribing .voice-bars i {
+  background: #d49a42;
+  animation: bars 0.85s ease-in-out infinite alternate;
+  animation-delay: calc(var(--i) * -55ms);
+}
+
+.voice-composer.complete .voice-bars i {
+  background: #78a24b;
+}
+
 .mic-button {
   width: 46px;
   height: 46px;
@@ -335,6 +367,19 @@ a:focus-visible {
 
 .mic-button:hover {
   transform: translateY(-2px);
+}
+
+.mic-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.mic-button:disabled:hover {
+  transform: none;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
 }
 
 .stop-square {
@@ -551,6 +596,10 @@ a:focus-visible {
   font-size: 8px;
 }
 
+.devices > div > small.status-ready {
+  color: #a7cf75;
+}
+
 @keyframes blink {
   50% {
     opacity: 0.25;
@@ -561,6 +610,12 @@ a:focus-visible {
   to {
     height: calc(7px + var(--i) * 1.4px);
     opacity: 0.45;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

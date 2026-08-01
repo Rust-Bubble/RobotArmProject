@@ -37,6 +37,30 @@ scripts/
 python -m src.main --text "帮我拿桌上的水杯"
 ```
 
+## Web 录音与 STT
+
+项目已支持在浏览器中录音，并通过后端代理调用 OpenAI-compatible
+音频转写接口。先安装依赖，再根据 `.env.example` 配置环境变量：
+
+```powershell
+python -m pip install -r requirements.txt
+$env:STT_API_URL = "https://your-stt-service.example/v1/audio/transcriptions"
+$env:STT_API_KEY = "replace-me"
+$env:STT_MODEL = "whisper-1"
+python -m uvicorn src.api.app:app --reload --host 127.0.0.1 --port 8000
+```
+
+另开一个终端启动前端：
+
+```powershell
+cd frontend
+pnpm install
+pnpm dev
+```
+
+访问 `http://127.0.0.1:5173`，允许麦克风权限后即可录音转写。API Key
+只保存在后端环境变量中，不会下发到浏览器。
+
 ## 后续开发重点
 
 ```text
