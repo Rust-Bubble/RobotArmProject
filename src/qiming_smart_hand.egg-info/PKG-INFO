@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: qiming-smart-hand
+Version: 0.1.0
+Summary: MLLM-based assistive robotic arm framework for visually impaired users.
+Requires-Python: >=3.10
+Requires-Dist: pymycobot>=3.6.0
+Requires-Dist: pyyaml>=6.0.0
+Requires-Dist: fastapi>=0.100.0
+Requires-Dist: uvicorn[standard]>=0.23.0
+Requires-Dist: sqlalchemy>=2.0.0
+Requires-Dist: aiosqlite>=0.19.0
+Requires-Dist: asyncpg>=0.29.0
+Requires-Dist: psycopg2-binary>=2.9.0

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 
 Pose = Tuple[float, float, float, float, float, float]
@@ -15,6 +15,28 @@ class ImageFrame:
     """摄像头采集到的一帧图像。"""
 
     data: Optional[Any] = None
+    color_frame: Optional[Any] = None
+    depth_frame: Optional[Any] = None
+
+
+@dataclass
+class DetectedObject:
+    """检测到的目标物体信息。"""
+
+    class_name: str
+    coordinates: Tuple[float, float, float, float]
+    confidence: float
+    center: Tuple[float, float]
+
+
+@dataclass
+class DetectionResult:
+    """YOLO检测结果。"""
+
+    success: bool
+    detected: bool
+    objects: Optional[List[DetectedObject]] = None
+    message: Optional[str] = None
 
 
 @dataclass

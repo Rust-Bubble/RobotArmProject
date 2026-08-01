@@ -8,3 +8,8 @@ robot:
   gripper:
     open_value: 80
     close_value: 20
+  camera:
+    sdk_path: "D:\\Documnet\\Other material\\3D摄像头客户资料\\驱动程序及SDK开发\\windows\\OpenNI2 SDK\\Windows_V2.3.0\\windows\\SDK\\x64\\Redist"
+    calibration_img_dir: "D:\\camera_images"
+    chessboard_size: [9, 6]
+    square_size: 0.025
