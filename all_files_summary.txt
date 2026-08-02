@@ -1,0 +1,3943 @@
+================================================================================
+文件内容汇总导出
+生成时间: 2026-08-02 13:32:56
+================================================================================
+
+
+================================================================================
+文件: pyproject.toml
+路径: ./pyproject.toml
+--------------------------------------------------------------------------------
+[project]
+name = "qiming-smart-hand"
+version = "0.1.0"
+description = "MLLM-based assistive robotic arm framework for visually impaired users."
+requires-python = ">=3.10"
+dependencies = [
+    "pymycobot>=3.6.0",
+    "pyyaml>=6.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.23.0",
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.19.0", 
+    "asyncpg>=0.29.0",           # PostgreSQL 异步驱动
+    "psycopg2-binary>=2.9.0",    # 可选，用于同步操作，但异步用 asyncpg
+]
+
+================================================================================
+文件: uv.lock
+路径: ./uv.lock
+--------------------------------------------------------------------------------
+version = 1
+revision = 3
+requires-python = ">=3.10"
+
+[[package]]
+name = "qiming-smart-hand"
+version = "0.1.0"
+source = { virtual = "." }
+
+================================================================================
+文件: README.md
+路径: ./README.md
+--------------------------------------------------------------------------------
+# 启明智手
+
+这是一个简易原型工程，目标是先搭建整体代码框架：
+
+```text
+语音指令 -> 图像采集 -> MLLM 理解 -> 机械臂动作 -> 语音反馈
+```
+
+当前阶段不展开复杂实现，只保留核心模块边界，方便后续逐步接入真实硬件和模型。
+
+## 目录结构
+
+```text
+config/
+  robot.yaml        机械臂配置
+  llm.yaml          MLLM 配置
+
+src/
+  main.py           主流程入口
+  qiming/
+    speech/         语音输入与播报
+    vision/         摄像头图像采集
+    mllm/           MLLM 识别与动作决策
+    arm_control/    机械臂控制
+    models.py       核心数据结构
+    utils/          配置与日志工具
+
+scripts/
+  demo_text_command.py    文本模拟语音指令
+```
+
+## 当前运行方式
+
+现在还没有接入真实麦克风、摄像头和 MLLM，可以先用文本模拟语音输入：
+
+```powershell
+python -m src.main --text "帮我拿桌上的水杯"
+```
+
+## 后续开发重点
+
+```text
+1. 接入 ASR，把麦克风语音转成文本。
+2. 接入摄像头，获取真实图像。
+3. 接入 MLLM，让模型识别图像并输出动作。
+4. 接入 MyCobot，让机械臂执行抓取或移动。
+```
+
+================================================================================
+文件: requirements.txt
+路径: ./requirements.txt
+--------------------------------------------------------------------------------
+pymycobot>=3.6.0
+pyyaml>=6.0.0
+numpy>=1.24.0
+opencv-python>=4.8.0
+ultralytics>=8.0.0
+
+================================================================================
+文件: .gitignore
+路径: ./.gitignore
+--------------------------------------------------------------------------------
+# Virtual environments
+.venv/
+venv/
+robot-arm-env/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Database config (contains passwords)
+config/database.yaml
+config/database.local.yaml
+
+# IDE
+.vscode/
+.idea/
+
+# Logs / data
+data/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+================================================================================
+文件: frontend/vite.config.ts
+路径: ./frontend/vite.config.ts
+--------------------------------------------------------------------------------
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    host: "127.0.0.1",
+  },
+});
+
+================================================================================
+文件: frontend/tsconfig.json
+路径: ./frontend/tsconfig.json
+--------------------------------------------------------------------------------
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}
+
+================================================================================
+文件: frontend/pnpm-lock.yaml
+路径: ./frontend/pnpm-lock.yaml
+--------------------------------------------------------------------------------
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.8)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.3
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.3(@types/react@19.2.17)
+      '@vitejs/plugin-react':
+        specifier: ^4.3.4
+        version: 4.7.0(vite@6.4.3)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.5
+        version: 6.4.3
+
+packages:
+
+  '@babel/code-frame@7.29.7':
+    resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/compat-data@7.29.7':
+    resolution: {integrity: sha512-locTkQyKvwIEgBzVrn8693ebc97F2U8ZHjbXwDXJ5Fn2TCpNwTlKcaKLkdHop5c/icOFE7qt7Q9JC5hnKNa6Gg==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/core@7.29.7':
+    resolution: {integrity: sha512-RgHBCvtjbOK2gXSNBNIkNoEc9qoVEtau3hj8gEqKQuL3HZAibKarWFEI3Lfm6EYKkLalOh8eSrj9b+ch9H/VBA==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/generator@7.29.7':
+    resolution: {integrity: sha512-DkXD5OJQaAQIdZ1bt3UZdEnHAn9Imd3IVBdX03UFe+ony9Ojw5pzr9YVKGDY1jt+Gcn/FnGkNf8r+Vj5NOJWtQ==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/helper-compilation-targets@7.29.7':
+    resolution: {integrity: sha512-wem6WaBj4NaVYVdNhLPPVacES6ZJ+KBBfSkTMD3YZxbP3rm3Di85tJU5ljaUNhaOynt+Aj0xruhYuzQBt8n71g==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/helper-globals@7.29.7':
+    resolution: {integrity: sha512-3nQVUAtvkKH9zahfWgw96Jc/uFOmjACE1kQz82E2lqWmHBgjzbNlsC22nuQTfahmWeQtTq5nQ/4Nnd2A1wj4zA==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/helper-module-imports@7.29.7':
+    resolution: {integrity: sha512-ejHwrQQYcm9xnTivShn2IDOlIzInN34AXskvq9QicvCtEzq1Vzclu/tKF8Jq1Cg8JG2GL6/EmjgsCT7lXepE3g==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/helper-module-transforms@7.29.7':
+    resolution: {integrity: sha512-UPUVSyXbOh627KiCIGQSgwWzGeBKLkaJ9PJEdrngIwMSzxLR4jS4+f1f1jb7VzBbg8nFLaYotvVPFCTqdrmTAg==}
+    engines: {node: '>=6.9.0'}
+    peerDependencies:
+      '@babel/core': ^7.0.0
+
+  '@babel/helper-plugin-utils@7.29.7':
+    resolution: {integrity: sha512-G7sHYigPY17oO5SYWnfD/0MTBwVR781S/JI643e/JhUYgVgWE/61SoW3NH9KWUKyKq5LVh3npif99Wkt6j86Jw==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/helper-string-parser@7.29.7':
+    resolution: {integrity: sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/helper-validator-identifier@7.29.7':
+    resolution: {integrity: sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/helper-validator-option@7.29.7':
+    resolution: {integrity: sha512-N9ZErrD+yW5geCDtBqnOoxmR8+tNKiGuxKlDpuJxfsqpa2dFcexaziGAE/qoHLiDDreVNMupxGmSoNlyvsA3gw==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/helpers@7.29.7':
+    resolution: {integrity: sha512-1k2lAGRMfHTcwuNYcCNUmaUffmQv8KWMfh2iJUUeRlwlwH4FdNG7mfPI10NPfLHJFThE4Tyr4mv7kTNZOiPuBg==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/parser@7.29.7':
+    resolution: {integrity: sha512-hnORnjP/1P/zFEndoeX+n+t1RwWRJiJpM/jO7FW32Kn9r5+sJB2JWOdYo4L6k78j15eCwY3Gm/7364B1EMwtNg==}
+    engines: {node: '>=6.0.0'}
+    hasBin: true
+
+  '@babel/plugin-transform-react-jsx-self@7.29.7':
+    resolution: {integrity: sha512-TL0hMc9xzy86VD31nUiwzd5otRAcyEPcsegCxolO0PvcXuH1v0kECe/UIznYFihpkvU5wg/jk4v0TTEFfm53fw==}
+    engines: {node: '>=6.9.0'}
+    peerDependencies:
+      '@babel/core': ^7.0.0-0
+
+  '@babel/plugin-transform-react-jsx-source@7.29.7':
+    resolution: {integrity: sha512-06IyK09H3wi4cGbhDBwp5gUGo0IKtnYa8tyTiephirPCK6fbobVGiXMMI5zLQ4aKEYP3wZ3ArU44o+8KMrSG/Q==}
+    engines: {node: '>=6.9.0'}
+    peerDependencies:
+      '@babel/core': ^7.0.0-0
+
+  '@babel/template@7.29.7':
+    resolution: {integrity: sha512-puq+Gf35oI24FeN11LkoUQFqv9uwNeWpxXZi/Ji3rRIoKAzKnxRaZ+Gkj0vKS9ZCiTESfng1N9LyOyXvo+m+Gg==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/traverse@7.29.7':
+    resolution: {integrity: sha512-EhlfNQtZ+NK22w5BM61ciuiq1m58ed33Wr1Xan//ZRTy6hgjnwyCffRYwzsGXdASJSUJ1guZILsErh1eQcl+zw==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/types@7.29.7':
+    resolution: {integrity: sha512-4zBIxpPzowiZpusoFkyGVwakdRJUyuH5PxQ/PrqghfdFWWasvnCdPfQXHrenDai+gyLARulZjZowCOj6fjT4pA==}
+    engines: {node: '>=6.9.0'}
+
+  '@esbuild/aix-ppc64@0.25.12':
+    resolution: {integrity: sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA==}
+    engines: {node: '>=18'}
+    cpu: [ppc64]
+    os: [aix]
+
+  '@esbuild/android-arm64@0.25.12':
+    resolution: {integrity: sha512-6AAmLG7zwD1Z159jCKPvAxZd4y/VTO0VkprYy+3N2FtJ8+BQWFXU+OxARIwA46c5tdD9SsKGZ/1ocqBS/gAKHg==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [android]
+
+  '@esbuild/android-arm@0.25.12':
+    resolution: {integrity: sha512-VJ+sKvNA/GE7Ccacc9Cha7bpS8nyzVv0jdVgwNDaR4gDMC/2TTRc33Ip8qrNYUcpkOHUT5OZ0bUcNNVZQ9RLlg==}
+    engines: {node: '>=18'}
+    cpu: [arm]
+    os: [android]
+
+  '@esbuild/android-x64@0.25.12':
+    resolution: {integrity: sha512-5jbb+2hhDHx5phYR2By8GTWEzn6I9UqR11Kwf22iKbNpYrsmRB18aX/9ivc5cabcUiAT/wM+YIZ6SG9QO6a8kg==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [android]
+
+  '@esbuild/darwin-arm64@0.25.12':
+    resolution: {integrity: sha512-N3zl+lxHCifgIlcMUP5016ESkeQjLj/959RxxNYIthIg+CQHInujFuXeWbWMgnTo4cp5XVHqFPmpyu9J65C1Yg==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@esbuild/darwin-x64@0.25.12':
+    resolution: {integrity: sha512-HQ9ka4Kx21qHXwtlTUVbKJOAnmG1ipXhdWTmNXiPzPfWKpXqASVcWdnf2bnL73wgjNrFXAa3yYvBSd9pzfEIpA==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@esbuild/freebsd-arm64@0.25.12':
+    resolution: {integrity: sha512-gA0Bx759+7Jve03K1S0vkOu5Lg/85dou3EseOGUes8flVOGxbhDDh/iZaoek11Y8mtyKPGF3vP8XhnkDEAmzeg==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [freebsd]
+
+  '@esbuild/freebsd-x64@0.25.12':
+    resolution: {integrity: sha512-TGbO26Yw2xsHzxtbVFGEXBFH0FRAP7gtcPE7P5yP7wGy7cXK2oO7RyOhL5NLiqTlBh47XhmIUXuGciXEqYFfBQ==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@esbuild/linux-arm64@0.25.12':
+    resolution: {integrity: sha512-8bwX7a8FghIgrupcxb4aUmYDLp8pX06rGh5HqDT7bB+8Rdells6mHvrFHHW2JAOPZUbnjUpKTLg6ECyzvas2AQ==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@esbuild/linux-arm@0.25.12':
+    resolution: {integrity: sha512-lPDGyC1JPDou8kGcywY0YILzWlhhnRjdof3UlcoqYmS9El818LLfJJc3PXXgZHrHCAKs/Z2SeZtDJr5MrkxtOw==}
+    engines: {node: '>=18'}
+    cpu: [arm]
+    os: [linux]
+
+  '@esbuild/linux-ia32@0.25.12':
+    resolution: {integrity: sha512-0y9KrdVnbMM2/vG8KfU0byhUN+EFCny9+8g202gYqSSVMonbsCfLjUO+rCci7pM0WBEtz+oK/PIwHkzxkyharA==}
+    engines: {node: '>=18'}
+    cpu: [ia32]
+    os: [linux]
+
+  '@esbuild/linux-loong64@0.25.12':
+    resolution: {integrity: sha512-h///Lr5a9rib/v1GGqXVGzjL4TMvVTv+s1DPoxQdz7l/AYv6LDSxdIwzxkrPW438oUXiDtwM10o9PmwS/6Z0Ng==}
+    engines: {node: '>=18'}
+    cpu: [loong64]
+    os: [linux]
+
+  '@esbuild/linux-mips64el@0.25.12':
+    resolution: {integrity: sha512-iyRrM1Pzy9GFMDLsXn1iHUm18nhKnNMWscjmp4+hpafcZjrr2WbT//d20xaGljXDBYHqRcl8HnxbX6uaA/eGVw==}
+    engines: {node: '>=18'}
+    cpu: [mips64el]
+    os: [linux]
+
+  '@esbuild/linux-ppc64@0.25.12':
+    resolution: {integrity: sha512-9meM/lRXxMi5PSUqEXRCtVjEZBGwB7P/D4yT8UG/mwIdze2aV4Vo6U5gD3+RsoHXKkHCfSxZKzmDssVlRj1QQA==}
+    engines: {node: '>=18'}
+    cpu: [ppc64]
+    os: [linux]
+
+  '@esbuild/linux-riscv64@0.25.12':
+    resolution: {integrity: sha512-Zr7KR4hgKUpWAwb1f3o5ygT04MzqVrGEGXGLnj15YQDJErYu/BGg+wmFlIDOdJp0PmB0lLvxFIOXZgFRrdjR0w==}
+    engines: {node: '>=18'}
+    cpu: [riscv64]
+    os: [linux]
+
+  '@esbuild/linux-s390x@0.25.12':
+    resolution: {integrity: sha512-MsKncOcgTNvdtiISc/jZs/Zf8d0cl/t3gYWX8J9ubBnVOwlk65UIEEvgBORTiljloIWnBzLs4qhzPkJcitIzIg==}
+    engines: {node: '>=18'}
+    cpu: [s390x]
+    os: [linux]
+
+  '@esbuild/linux-x64@0.25.12':
+    resolution: {integrity: sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [linux]
+
+  '@esbuild/netbsd-arm64@0.25.12':
+    resolution: {integrity: sha512-xXwcTq4GhRM7J9A8Gv5boanHhRa/Q9KLVmcyXHCTaM4wKfIpWkdXiMog/KsnxzJ0A1+nD+zoecuzqPmCRyBGjg==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [netbsd]
+
+  '@esbuild/netbsd-x64@0.25.12':
+    resolution: {integrity: sha512-Ld5pTlzPy3YwGec4OuHh1aCVCRvOXdH8DgRjfDy/oumVovmuSzWfnSJg+VtakB9Cm0gxNO9BzWkj6mtO1FMXkQ==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [netbsd]
+
+  '@esbuild/openbsd-arm64@0.25.12':
+    resolution: {integrity: sha512-fF96T6KsBo/pkQI950FARU9apGNTSlZGsv1jZBAlcLL1MLjLNIWPBkj5NlSz8aAzYKg+eNqknrUJ24QBybeR5A==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [openbsd]
+
+  '@esbuild/openbsd-x64@0.25.12':
+    resolution: {integrity: sha512-MZyXUkZHjQxUvzK7rN8DJ3SRmrVrke8ZyRusHlP+kuwqTcfWLyqMOE3sScPPyeIXN/mDJIfGXvcMqCgYKekoQw==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [openbsd]
+
+  '@esbuild/openharmony-arm64@0.25.12':
+    resolution: {integrity: sha512-rm0YWsqUSRrjncSXGA7Zv78Nbnw4XL6/dzr20cyrQf7ZmRcsovpcRBdhD43Nuk3y7XIoW2OxMVvwuRvk9XdASg==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [openharmony]
+
+  '@esbuild/sunos-x64@0.25.12':
+    resolution: {integrity: sha512-3wGSCDyuTHQUzt0nV7bocDy72r2lI33QL3gkDNGkod22EsYl04sMf0qLb8luNKTOmgF/eDEDP5BFNwoBKH441w==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [sunos]
+
+  '@esbuild/win32-arm64@0.25.12':
+    resolution: {integrity: sha512-rMmLrur64A7+DKlnSuwqUdRKyd3UE7oPJZmnljqEptesKM8wx9J8gx5u0+9Pq0fQQW8vqeKebwNXdfOyP+8Bsg==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@esbuild/win32-ia32@0.25.12':
+    resolution: {integrity: sha512-HkqnmmBoCbCwxUKKNPBixiWDGCpQGVsrQfJoVGYLPT41XWF8lHuE5N6WhVia2n4o5QK5M4tYr21827fNhi4byQ==}
+    engines: {node: '>=18'}
+    cpu: [ia32]
+    os: [win32]
+
+  '@esbuild/win32-x64@0.25.12':
+    resolution: {integrity: sha512-alJC0uCZpTFrSL0CCDjcgleBXPnCrEAhTBILpeAp7M/OFgoqtAetfBzX0xM00MUsVVPpVjlPuMbREqnZCXaTnA==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [win32]
+
+  '@jridgewell/gen-mapping@0.3.13':
+    resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
+
+  '@jridgewell/remapping@2.3.5':
+    resolution: {integrity: sha512-LI9u/+laYG4Ds1TDKSJW2YPrIlcVYOwi2fUC6xB43lueCjgxV4lffOCZCtYFiH6TNOX+tQKXx97T4IKHbhyHEQ==}
+
+  '@jridgewell/resolve-uri@3.1.2':
+    resolution: {integrity: sha512-bRISgCIjP20/tbWSPWMEi54QVPRZExkuD9lJL+UIxUKtwVJA8wW1Trb1jMs1RFXo1CBTNZ/5hpC9QvmKWdopKw==}
+    engines: {node: '>=6.0.0'}
+
+  '@jridgewell/sourcemap-codec@1.5.5':
+    resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
+
+  '@jridgewell/trace-mapping@0.3.31':
+    resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@rolldown/pluginutils@1.0.0-beta.27':
+    resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
+
+  '@rollup/rollup-android-arm-eabi@4.62.3':
+    resolution: {integrity: sha512-c0wdcekXtQvvn5Tsrk/+op/gUArrbWaFduBnTLP2l1cKLSQs4diMWjJw3m6A0DdzT8dAAX95KpkJ3qynCePbmw==}
+    cpu: [arm]
+    os: [android]
+
+  '@rollup/rollup-android-arm64@4.62.3':
+    resolution: {integrity: sha512-3YjElDdWN+qXAFbJ/CzPV+0wspLqh54k/I6GfdYtEJRqg7buSgc1yPM3B+93j1M4neobtkATHZTmxK2AMVGfnA==}
+    cpu: [arm64]
+    os: [android]
+
+  '@rollup/rollup-darwin-arm64@4.62.3':
+    resolution: {integrity: sha512-Pch2pFNOxxz1hTjypIdPyRTR6riiwRl84+VcN9djS680fw+Co1nAJINrdpqp7KV0NvyuU8ilZXZCjd7ykJl1GQ==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@rollup/rollup-darwin-x64@4.62.3':
+    resolution: {integrity: sha512-LEuncFUHFiF8t4yZVZvvZA1wk0pjAscRnsrn1EfTEmN4HXotBi2YtcnLRyaK6UbuczW7xZS5ES+81Rdz8Z0T6g==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@rollup/rollup-freebsd-arm64@4.62.3':
+    resolution: {integrity: sha512-zvBUvsQUpOWALdDsk6qbS8bXf2VxmPisuudNDrY7x0p0jBdsoZl8HsHczIOgkQiZldmcacMKtBzpoGVNeIe2bQ==}
+    cpu: [arm64]
+    os: [freebsd]
+
+  '@rollup/rollup-freebsd-x64@4.62.3':
+    resolution: {integrity: sha512-C2KmNrcSem/AMg984H/dev+si0lieQGdXdR/lYGJnuumXnFb9Y7QdiI62obFdLlxRYLBv4P0eUVIDbD4c1vVvw==}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@rollup/rollup-linux-arm-gnueabihf@4.62.3':
+    resolution: {integrity: sha512-ggXnsTAEzNQx74XpunRsiZ9aBZDsI7XIa0hm2nzR9f4WzH5/f/d73ZSDaC5ejJ8YLY4NW+V3wr0tjOaeCq8hqA==}
+    cpu: [arm]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-arm-musleabihf@4.62.3':
+    resolution: {integrity: sha512-2vng+FlzNUhKZxtej3IUqJgbZoQk2M/dwQM20+ULV0R/E/8tr9/P6uEf2iiGIk4HL0zMKh5Jry7mUHdUOvyGgA==}
+    cpu: [arm]
+    os: [linux]
+    libc: [musl]
+
+  '@rollup/rollup-linux-arm64-gnu@4.62.3':
+    resolution: {integrity: sha512-LLLFZKt4/Nraf9rxDkhiU8QVgLF4WmCkfr0L4fj0fPfIZFBib0DeiFk1hhaYKd03LFAFJcxHslhDFlNJLylf5Q==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-arm64-musl@4.62.3':
+    resolution: {integrity: sha512-WJkdQCvS9sWNOUBJZfQRKpZGFBztRzcowI+nndmflKgU4XY+3a420FgTOSKTsVqJbnzSxeT4vaJalpOaPo2YCQ==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@rollup/rollup-linux-loong64-gnu@4.62.3':
+    resolution: {integrity: sha512-PwHXCCS2n64/1Ot6rP1YEYA02MGYBcQlr8CSZZyrUG2O7NH6NklYmvr9v3Jy+5e/eDeNchc/ukmKJi9LuflMIQ==}
+    cpu: [loong64]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-loong64-musl@4.62.3':
+    resolution: {integrity: sha512-vUjxINQu3RC8NZS3ykk1gN65gIz8pAopOq2HXuZhiIxHdx7TFvDG+jgrdSgInu1Eza4/Rfi2VzZgyIgEH4WOaw==}
+    cpu: [loong64]
+    os: [linux]
+    libc: [musl]
+
+  '@rollup/rollup-linux-ppc64-gnu@4.62.3':
+    resolution: {integrity: sha512-wzko4aJ13+0G3kGnviCg5gnXFKd40izKsrf2uOw12US4XqprkDrmwOpeW14aSNa37V8bfPcz5Fkob6LZ3BAPmA==}
+    cpu: [ppc64]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-ppc64-musl@4.62.3':
+    resolution: {integrity: sha512-8120ue0JUMSwy11stlwnfdX3pPd+WZYGCDBwEHWtIHi6pOpZmsEF5QKB7a/UN+XFdqvobxz98kv8RTqikyCEBw==}
+    cpu: [ppc64]
+    os: [linux]
+    libc: [musl]
+
+  '@rollup/rollup-linux-riscv64-gnu@4.62.3':
+    resolution: {integrity: sha512-XLFHnR3tXMjbOCh2vtVJHmxt+995uJsTERQyseFDRA0xxMxyTZPLa3OIUlyFaO4mF/Lu0FjmWHCuPXJT1n/IOg==}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-riscv64-musl@4.62.3':
+    resolution: {integrity: sha512-se6yXvNGMIl0f+RQzyh7XAmia8/9kplQx424wnG2w0C1oi6XgO6Y8otKhdXFHbHs88Ihavzmvh1NWjuovE76BQ==}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [musl]
+
+  '@rollup/rollup-linux-s390x-gnu@4.62.3':
+    resolution: {integrity: sha512-gNoxRefktVIiGflpONuxWWXZAzIQG++z9qHO3xKwk4WdDMuQja3JHGfE1u0i3PfPDyvhypdk+WrgIJqLhGG7sg==}
+    cpu: [s390x]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-x64-gnu@4.62.3':
+    resolution: {integrity: sha512-V4KtWtQfAFMU7+9/A/VDps/VI8CHd3cYz0L8sgJzz8qK7eY7wI4ruFD82UYIYvW9Z4DtlTfhQcsl4XyPHW5uSg==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@rollup/rollup-linux-x64-musl@4.62.3':
+    resolution: {integrity: sha512-LBx9LYXvj2CBkMkjLdNAWLwH0MLMin7do2VcVo9kVPibGLkY0BQQut2fv7NVqkXqZ/CrAu9LqDHVV1xHCMpCPw==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@rollup/rollup-openbsd-x64@4.62.3':
+    resolution: {integrity: sha512-ABVf3Q0RCu7NcyCCOZQI0pJ3GuSdfSl8EXcy88QtdceIMIoCUdfhsJChZ64L9zVM2aJHjde1Bhn5uqSRcX9ySA==}
+    cpu: [x64]
+    os: [openbsd]
+
+  '@rollup/rollup-openharmony-arm64@4.62.3':
+    resolution: {integrity: sha512-+2Cy/ldweGBLlPIKsQLF8U5N44a0KDdbrk1rAjHOM9M2K+kGdIVjHLmmrZIcx+9Ny3ke/1JomCsDI1ocb11+sg==}
+    cpu: [arm64]
+    os: [openharmony]
+
+  '@rollup/rollup-win32-arm64-msvc@4.62.3':
+    resolution: {integrity: sha512-dtZvzc8BedpSaFNy75x6uiWwAGTH+aZHDtdrqP6qk+WcLJrfti6sGje1ZJ9UxyzDLF23d/mV+PaMwuC0hL7UVA==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@rollup/rollup-win32-ia32-msvc@4.62.3':
+    resolution: {integrity: sha512-Rj8Ra4noo+aYy7sKBggCx0407mws34kAb1ySyWuq5DAtFBQdkSwnsjCgPrhPe9cvgBKZIukpE+CVHvORCS93kQ==}
+    cpu: [ia32]
+    os: [win32]
+
+  '@rollup/rollup-win32-x64-gnu@4.62.3':
+    resolution: {integrity: sha512-vp7N084ew/odXn2gi/mzm9mUkQu9l6AiN6dt4IeUM2Uvm9o+cVmP+YkqbMOteLbiGgqBBlJZjIMYVCfOOIVbVQ==}
+    cpu: [x64]
+    os: [win32]
+
+  '@rollup/rollup-win32-x64-msvc@4.62.3':
+    resolution: {integrity: sha512-MOG/3gTOn4Fwf574RVOaY61I5o6P90legkFADiTyn1hyjNydT+cerU2rLUwPdZkKKyJ+iT+K9p7WXK4LM1Ka6g==}
+    cpu: [x64]
+    os: [win32]
+
+  '@types/babel__core@7.20.5':
+    resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
+
+  '@types/babel__generator@7.27.0':
+    resolution: {integrity: sha512-ufFd2Xi92OAVPYsy+P4n7/U7e68fex0+Ee8gSG9KX7eo084CWiQ4sdxktvdl0bOPupXtVJPY19zk6EwWqUQ8lg==}
+
+  '@types/babel__template@7.4.4':
+    resolution: {integrity: sha512-h/NUaSyG5EyxBIp8YRxo4RMe2/qQgvyowRwVMzhYhBCONbW8PUsg4lkFMrhgZhUe5z3L3MiLDuvyJ/CaPa2A8A==}
+
+  '@types/babel__traverse@7.28.0':
+    resolution: {integrity: sha512-8PvcXf70gTDZBgt9ptxJ8elBeBjcLOAcOtoO/mPJjtji1+CdGbHgm77om1GrsPxsiE+uXIpNSK64UYaIwQXd4Q==}
+
+  '@types/estree@1.0.9':
+    resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
+
+  '@types/react-dom@19.2.3':
+    resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
+    peerDependencies:
+      '@types/react': ^19.2.0
+
+  '@types/react@19.2.17':
+    resolution: {integrity: sha512-MXfmqaVPEVgkBT/aY0aGCkRWWtByiYQXo3xdQ8r5RzuFrPiRn8Gar2tQdXSUQ2GKV3bkXckek89V8wQBY2Q/Aw==}
+
+  '@vitejs/plugin-react@4.7.0':
+    resolution: {integrity: sha512-gUu9hwfWvvEDBBmgtAowQCojwZmJ5mcLn3aufeCsitijs3+f2NsrPtlAWIR6OPiqljl96GVCUbLe0HyqIpVaoA==}
+    engines: {node: ^14.18.0 || >=16.0.0}
+    peerDependencies:
+      vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
+
+  baseline-browser-mapping@2.11.4:
+    resolution: {integrity: sha512-s4+sLr9mZ/CyqeRritFeYV/Zx73OAtmaHn6kkBS1XRoJn1hrg3xIDUcpicAEX68tkcIN0iBCgti31C8zxtkhsQ==}
+    engines: {node: '>=6.0.0'}
+    hasBin: true
+
+  browserslist@4.28.7:
+    resolution: {integrity: sha512-JxV13hNrFxqjOc8alRbq9dK1MM79NEXYpma2B2J4wAtpWS5zIEIKqWPGCl7N4o7Uc7B7itylh7SuDujATRyyTw==}
+    engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
+    hasBin: true
+
+  caniuse-lite@1.0.30001806:
+    resolution: {integrity: sha512-72Cuvd95zbSYPKq6Fhg8eDJRlzgWDf7/mtoZv6Qe/DYNCEBdNxoA3+rZAU2ZhGCpZlns3EssFavaZomckT5Uuw==}
+
+  convert-source-map@2.0.0:
+    resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
+
+  csstype@3.2.3:
+    resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
+
+  debug@4.4.3:
+    resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
+    engines: {node: '>=6.0'}
+    peerDependencies:
+      supports-color: '*'
+    peerDependenciesMeta:
+      supports-color:
+        optional: true
+
+  electron-to-chromium@1.5.396:
+    resolution: {integrity: sha512-yHiw2Y3C3H9U6TMbOfoWK/BPreiOPXRfTWPBwQBoZG6/8TB6eOPnsy5oaRYuatR7Fw2SJ4kKforgufeo7fq0EQ==}
+
+  esbuild@0.25.12:
+    resolution: {integrity: sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  escalade@3.2.0:
+    resolution: {integrity: sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA==}
+    engines: {node: '>=6'}
+
+  fdir@6.5.0:
+    resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
+    engines: {node: '>=12.0.0'}
+    peerDependencies:
+      picomatch: ^3 || ^4
+    peerDependenciesMeta:
+      picomatch:
+        optional: true
+
+  fsevents@2.3.3:
+    resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
+  gensync@1.0.0-beta.2:
+    resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
+    engines: {node: '>=6.9.0'}
+
+  js-tokens@4.0.0:
+    resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
+
+  jsesc@3.1.0:
+    resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
+    engines: {node: '>=6'}
+    hasBin: true
+
+  json5@2.2.3:
+    resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
+    engines: {node: '>=6'}
+    hasBin: true
+
+  lru-cache@5.1.1:
+    resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
+
+  lucide-react@0.468.0:
+    resolution: {integrity: sha512-6koYRhnM2N0GGZIdXzSeiNwguv1gt/FAjZOiPl76roBi3xKEXa4WmfpxgQwTTL4KipXjefrnf3oV4IsYhi4JFA==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0-rc
+
+  ms@2.1.3:
+    resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
+
+  nanoid@3.3.16:
+    resolution: {integrity: sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==}
+    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
+
+  node-releases@2.0.51:
+    resolution: {integrity: sha512-wRNIrw4DmVLKQlbgOMdkMx27Wrpzes2hh5Jtbi2bjPd+4wJstWIqP5A+lscnqbm0xxmT5Bpg8Lec5ItEBwx6BQ==}
+    engines: {node: '>=18'}
+
+  picocolors@1.1.1:
+    resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
+
+  picomatch@4.0.5:
+    resolution: {integrity: sha512-RvwwcruNjI1ncT5xRakeyS9Lf8lcItv34KD+aif+VH9kduAyfYBipGh12274xtenIPZ119/R9BdTBa8gAwSh0A==}
+    engines: {node: '>=12'}
+
+  postcss@8.5.23:
+    resolution: {integrity: sha512-g50586zr4bZmwFiTlflMu8E0bDTb5I5gertgwAKmsdUlTQIhZtunzUlD1WSzwcVWPoAVpsrA6vlfCD7oXvRwgg==}
+    engines: {node: ^10 || ^12 || >=14}
+
+  react-dom@19.2.8:
+    resolution: {integrity: sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==}
+    peerDependencies:
+      react: ^19.2.8
+
+  react-refresh@0.17.0:
+    resolution: {integrity: sha512-z6F7K9bV85EfseRCp2bzrpyQ0Gkw1uLoCel9XBVWPg/TjRj94SkJzUTGfOa4bs7iJvBWtQG0Wq7wnI0syw3EBQ==}
+    engines: {node: '>=0.10.0'}
+
+  react@19.2.8:
+    resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
+    engines: {node: '>=0.10.0'}
+
+  rollup@4.62.3:
+    resolution: {integrity: sha512-Gu0c0iH9FzgX1L1t7ByIbbS3Vmdz+6KHm/EsqmmC71gUQ82yvZRkTK6XzrFObSka91WUVdynqp6nsfilzr5k6Q==}
+    engines: {node: '>=18.0.0', npm: '>=8.0.0'}
+    hasBin: true
+
+  scheduler@0.27.0:
+    resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
+
+  semver@6.3.1:
+    resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
+    hasBin: true
+
+  source-map-js@1.2.1:
+    resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
+    engines: {node: '>=0.10.0'}
+
+  tinyglobby@0.2.17:
+    resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
+    engines: {node: '>=12.0.0'}
+
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+  update-browserslist-db@1.2.3:
+    resolution: {integrity: sha512-Js0m9cx+qOgDxo0eMiFGEueWztz+d4+M3rGlmKPT+T4IS/jP4ylw3Nwpu6cpTTP8R1MAC1kF4VbdLt3ARf209w==}
+    hasBin: true
+    peerDependencies:
+      browserslist: '>= 4.21.0'
+
+  vite@6.4.3:
+    resolution: {integrity: sha512-NTKlcQjlAK7MlQoyb6LgaqHc8sso/pVyUJYWMws3jg21uTJw/LddqIFPcPqP6PzpgbIcZyKI85sFE4HBrQDA8A==}
+    engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
+    hasBin: true
+    peerDependencies:
+      '@types/node': ^18.0.0 || ^20.0.0 || >=22.0.0
+      jiti: '>=1.21.0'
+      less: '*'
+      lightningcss: ^1.21.0
+      sass: '*'
+      sass-embedded: '*'
+      stylus: '*'
+      sugarss: '*'
+      terser: ^5.16.0
+      tsx: ^4.8.1
+      yaml: ^2.4.2
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+      jiti:
+        optional: true
+      less:
+        optional: true
+      lightningcss:
+        optional: true
+      sass:
+        optional: true
+      sass-embedded:
+        optional: true
+      stylus:
+        optional: true
+      sugarss:
+        optional: true
+      terser:
+        optional: true
+      tsx:
+        optional: true
+      yaml:
+        optional: true
+
+  yallist@3.1.1:
+    resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
+
+snapshots:
+
+  '@babel/code-frame@7.29.7':
+    dependencies:
+      '@babel/helper-validator-identifier': 7.29.7
+      js-tokens: 4.0.0
+      picocolors: 1.1.1
+
+  '@babel/compat-data@7.29.7': {}
+
+  '@babel/core@7.29.7':
+    dependencies:
+      '@babel/code-frame': 7.29.7
+      '@babel/generator': 7.29.7
+      '@babel/helper-compilation-targets': 7.29.7
+      '@babel/helper-module-transforms': 7.29.7(@babel/core@7.29.7)
+      '@babel/helpers': 7.29.7
+      '@babel/parser': 7.29.7
+      '@babel/template': 7.29.7
+      '@babel/traverse': 7.29.7
+      '@babel/types': 7.29.7
+      '@jridgewell/remapping': 2.3.5
+      convert-source-map: 2.0.0
+      debug: 4.4.3
+      gensync: 1.0.0-beta.2
+      json5: 2.2.3
+      semver: 6.3.1
+    transitivePeerDependencies:
+      - supports-color
+
+  '@babel/generator@7.29.7':
+    dependencies:
+      '@babel/parser': 7.29.7
+      '@babel/types': 7.29.7
+      '@jridgewell/gen-mapping': 0.3.13
+      '@jridgewell/trace-mapping': 0.3.31
+      jsesc: 3.1.0
+
+  '@babel/helper-compilation-targets@7.29.7':
+    dependencies:
+      '@babel/compat-data': 7.29.7
+      '@babel/helper-validator-option': 7.29.7
+      browserslist: 4.28.7
+      lru-cache: 5.1.1
+      semver: 6.3.1
+
+  '@babel/helper-globals@7.29.7': {}
+
+  '@babel/helper-module-imports@7.29.7':
+    dependencies:
+      '@babel/traverse': 7.29.7
+      '@babel/types': 7.29.7
+    transitivePeerDependencies:
+      - supports-color
+
+  '@babel/helper-module-transforms@7.29.7(@babel/core@7.29.7)':
+    dependencies:
+      '@babel/core': 7.29.7
+      '@babel/helper-module-imports': 7.29.7
+      '@babel/helper-validator-identifier': 7.29.7
+      '@babel/traverse': 7.29.7
+    transitivePeerDependencies:
+      - supports-color
+
+  '@babel/helper-plugin-utils@7.29.7': {}
+
+  '@babel/helper-string-parser@7.29.7': {}
+
+  '@babel/helper-validator-identifier@7.29.7': {}
+
+  '@babel/helper-validator-option@7.29.7': {}
+
+  '@babel/helpers@7.29.7':
+    dependencies:
+      '@babel/template': 7.29.7
+      '@babel/types': 7.29.7
+
+  '@babel/parser@7.29.7':
+    dependencies:
+      '@babel/types': 7.29.7
+
+  '@babel/plugin-transform-react-jsx-self@7.29.7(@babel/core@7.29.7)':
+    dependencies:
+      '@babel/core': 7.29.7
+      '@babel/helper-plugin-utils': 7.29.7
+
+  '@babel/plugin-transform-react-jsx-source@7.29.7(@babel/core@7.29.7)':
+    dependencies:
+      '@babel/core': 7.29.7
+      '@babel/helper-plugin-utils': 7.29.7
+
+  '@babel/template@7.29.7':
+    dependencies:
+      '@babel/code-frame': 7.29.7
+      '@babel/parser': 7.29.7
+      '@babel/types': 7.29.7
+
+  '@babel/traverse@7.29.7':
+    dependencies:
+      '@babel/code-frame': 7.29.7
+      '@babel/generator': 7.29.7
+      '@babel/helper-globals': 7.29.7
+      '@babel/parser': 7.29.7
+      '@babel/template': 7.29.7
+      '@babel/types': 7.29.7
+      debug: 4.4.3
+    transitivePeerDependencies:
+      - supports-color
+
+  '@babel/types@7.29.7':
+    dependencies:
+      '@babel/helper-string-parser': 7.29.7
+      '@babel/helper-validator-identifier': 7.29.7
+
+  '@esbuild/aix-ppc64@0.25.12':
+    optional: true
+
+  '@esbuild/android-arm64@0.25.12':
+    optional: true
+
+  '@esbuild/android-arm@0.25.12':
+    optional: true
+
+  '@esbuild/android-x64@0.25.12':
+    optional: true
+
+  '@esbuild/darwin-arm64@0.25.12':
+    optional: true
+
+  '@esbuild/darwin-x64@0.25.12':
+    optional: true
+
+  '@esbuild/freebsd-arm64@0.25.12':
+    optional: true
+
+  '@esbuild/freebsd-x64@0.25.12':
+    optional: true
+
+  '@esbuild/linux-arm64@0.25.12':
+    optional: true
+
+  '@esbuild/linux-arm@0.25.12':
+    optional: true
+
+  '@esbuild/linux-ia32@0.25.12':
+    optional: true
+
+  '@esbuild/linux-loong64@0.25.12':
+    optional: true
+
+  '@esbuild/linux-mips64el@0.25.12':
+    optional: true
+
+  '@esbuild/linux-ppc64@0.25.12':
+    optional: true
+
+  '@esbuild/linux-riscv64@0.25.12':
+    optional: true
+
+  '@esbuild/linux-s390x@0.25.12':
+    optional: true
+
+  '@esbuild/linux-x64@0.25.12':
+    optional: true
+
+  '@esbuild/netbsd-arm64@0.25.12':
+    optional: true
+
+  '@esbuild/netbsd-x64@0.25.12':
+    optional: true
+
+  '@esbuild/openbsd-arm64@0.25.12':
+    optional: true
+
+  '@esbuild/openbsd-x64@0.25.12':
+    optional: true
+
+  '@esbuild/openharmony-arm64@0.25.12':
+    optional: true
+
+  '@esbuild/sunos-x64@0.25.12':
+    optional: true
+
+  '@esbuild/win32-arm64@0.25.12':
+    optional: true
+
+  '@esbuild/win32-ia32@0.25.12':
+    optional: true
+
+  '@esbuild/win32-x64@0.25.12':
+    optional: true
+
+  '@jridgewell/gen-mapping@0.3.13':
+    dependencies:
+      '@jridgewell/sourcemap-codec': 1.5.5
+      '@jridgewell/trace-mapping': 0.3.31
+
+  '@jridgewell/remapping@2.3.5':
+    dependencies:
+      '@jridgewell/gen-mapping': 0.3.13
+      '@jridgewell/trace-mapping': 0.3.31
+
+  '@jridgewell/resolve-uri@3.1.2': {}
+
+  '@jridgewell/sourcemap-codec@1.5.5': {}
+
+  '@jridgewell/trace-mapping@0.3.31':
+    dependencies:
+      '@jridgewell/resolve-uri': 3.1.2
+      '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@rolldown/pluginutils@1.0.0-beta.27': {}
+
+  '@rollup/rollup-android-arm-eabi@4.62.3':
+    optional: true
+
+  '@rollup/rollup-android-arm64@4.62.3':
+    optional: true
+
+  '@rollup/rollup-darwin-arm64@4.62.3':
+    optional: true
+
+  '@rollup/rollup-darwin-x64@4.62.3':
+    optional: true
+
+  '@rollup/rollup-freebsd-arm64@4.62.3':
+    optional: true
+
+  '@rollup/rollup-freebsd-x64@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-arm-gnueabihf@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-arm-musleabihf@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-arm64-gnu@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-arm64-musl@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-loong64-gnu@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-loong64-musl@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-ppc64-gnu@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-ppc64-musl@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-riscv64-gnu@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-riscv64-musl@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-s390x-gnu@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-x64-gnu@4.62.3':
+    optional: true
+
+  '@rollup/rollup-linux-x64-musl@4.62.3':
+    optional: true
+
+  '@rollup/rollup-openbsd-x64@4.62.3':
+    optional: true
+
+  '@rollup/rollup-openharmony-arm64@4.62.3':
+    optional: true
+
+  '@rollup/rollup-win32-arm64-msvc@4.62.3':
+    optional: true
+
+  '@rollup/rollup-win32-ia32-msvc@4.62.3':
+    optional: true
+
+  '@rollup/rollup-win32-x64-gnu@4.62.3':
+    optional: true
+
+  '@rollup/rollup-win32-x64-msvc@4.62.3':
+    optional: true
+
+  '@types/babel__core@7.20.5':
+    dependencies:
+      '@babel/parser': 7.29.7
+      '@babel/types': 7.29.7
+      '@types/babel__generator': 7.27.0
+      '@types/babel__template': 7.4.4
+      '@types/babel__traverse': 7.28.0
+
+  '@types/babel__generator@7.27.0':
+    dependencies:
+      '@babel/types': 7.29.7
+
+  '@types/babel__template@7.4.4':
+    dependencies:
+      '@babel/parser': 7.29.7
+      '@babel/types': 7.29.7
+
+  '@types/babel__traverse@7.28.0':
+    dependencies:
+      '@babel/types': 7.29.7
+
+  '@types/estree@1.0.9': {}
+
+  '@types/react-dom@19.2.3(@types/react@19.2.17)':
+    dependencies:
+      '@types/react': 19.2.17
+
+  '@types/react@19.2.17':
+    dependencies:
+      csstype: 3.2.3
+
+  '@vitejs/plugin-react@4.7.0(vite@6.4.3)':
+    dependencies:
+      '@babel/core': 7.29.7
+      '@babel/plugin-transform-react-jsx-self': 7.29.7(@babel/core@7.29.7)
+      '@babel/plugin-transform-react-jsx-source': 7.29.7(@babel/core@7.29.7)
+      '@rolldown/pluginutils': 1.0.0-beta.27
+      '@types/babel__core': 7.20.5
+      react-refresh: 0.17.0
+      vite: 6.4.3
+    transitivePeerDependencies:
+      - supports-color
+
+  baseline-browser-mapping@2.11.4: {}
+
+  browserslist@4.28.7:
+    dependencies:
+      baseline-browser-mapping: 2.11.4
+      caniuse-lite: 1.0.30001806
+      electron-to-chromium: 1.5.396
+      node-releases: 2.0.51
+      update-browserslist-db: 1.2.3(browserslist@4.28.7)
+
+  caniuse-lite@1.0.30001806: {}
+
+  convert-source-map@2.0.0: {}
+
+  csstype@3.2.3: {}
+
+  debug@4.4.3:
+    dependencies:
+      ms: 2.1.3
+
+  electron-to-chromium@1.5.396: {}
+
+  esbuild@0.25.12:
+    optionalDependencies:
+      '@esbuild/aix-ppc64': 0.25.12
+      '@esbuild/android-arm': 0.25.12
+      '@esbuild/android-arm64': 0.25.12
+      '@esbuild/android-x64': 0.25.12
+      '@esbuild/darwin-arm64': 0.25.12
+      '@esbuild/darwin-x64': 0.25.12
+      '@esbuild/freebsd-arm64': 0.25.12
+      '@esbuild/freebsd-x64': 0.25.12
+      '@esbuild/linux-arm': 0.25.12
+      '@esbuild/linux-arm64': 0.25.12
+      '@esbuild/linux-ia32': 0.25.12
+      '@esbuild/linux-loong64': 0.25.12
+      '@esbuild/linux-mips64el': 0.25.12
+      '@esbuild/linux-ppc64': 0.25.12
+      '@esbuild/linux-riscv64': 0.25.12
+      '@esbuild/linux-s390x': 0.25.12
+      '@esbuild/linux-x64': 0.25.12
+      '@esbuild/netbsd-arm64': 0.25.12
+      '@esbuild/netbsd-x64': 0.25.12
+      '@esbuild/openbsd-arm64': 0.25.12
+      '@esbuild/openbsd-x64': 0.25.12
+      '@esbuild/openharmony-arm64': 0.25.12
+      '@esbuild/sunos-x64': 0.25.12
+      '@esbuild/win32-arm64': 0.25.12
+      '@esbuild/win32-ia32': 0.25.12
+      '@esbuild/win32-x64': 0.25.12
+
+  escalade@3.2.0: {}
+
+  fdir@6.5.0(picomatch@4.0.5):
+    optionalDependencies:
+      picomatch: 4.0.5
+
+  fsevents@2.3.3:
+    optional: true
+
+  gensync@1.0.0-beta.2: {}
+
+  js-tokens@4.0.0: {}
+
+  jsesc@3.1.0: {}
+
+  json5@2.2.3: {}
+
+  lru-cache@5.1.1:
+    dependencies:
+      yallist: 3.1.1
+
+  lucide-react@0.468.0(react@19.2.8):
+    dependencies:
+      react: 19.2.8
+
+  ms@2.1.3: {}
+
+  nanoid@3.3.16: {}
+
+  node-releases@2.0.51: {}
+
+  picocolors@1.1.1: {}
+
+  picomatch@4.0.5: {}
+
+  postcss@8.5.23:
+    dependencies:
+      nanoid: 3.3.16
+      picocolors: 1.1.1
+      source-map-js: 1.2.1
+
+  react-dom@19.2.8(react@19.2.8):
+    dependencies:
+      react: 19.2.8
+      scheduler: 0.27.0
+
+  react-refresh@0.17.0: {}
+
+  react@19.2.8: {}
+
+  rollup@4.62.3:
+    dependencies:
+      '@types/estree': 1.0.9
+    optionalDependencies:
+      '@rollup/rollup-android-arm-eabi': 4.62.3
+      '@rollup/rollup-android-arm64': 4.62.3
+      '@rollup/rollup-darwin-arm64': 4.62.3
+      '@rollup/rollup-darwin-x64': 4.62.3
+      '@rollup/rollup-freebsd-arm64': 4.62.3
+      '@rollup/rollup-freebsd-x64': 4.62.3
+      '@rollup/rollup-linux-arm-gnueabihf': 4.62.3
+      '@rollup/rollup-linux-arm-musleabihf': 4.62.3
+      '@rollup/rollup-linux-arm64-gnu': 4.62.3
+      '@rollup/rollup-linux-arm64-musl': 4.62.3
+      '@rollup/rollup-linux-loong64-gnu': 4.62.3
+      '@rollup/rollup-linux-loong64-musl': 4.62.3
+      '@rollup/rollup-linux-ppc64-gnu': 4.62.3
+      '@rollup/rollup-linux-ppc64-musl': 4.62.3
+      '@rollup/rollup-linux-riscv64-gnu': 4.62.3
+      '@rollup/rollup-linux-riscv64-musl': 4.62.3
+      '@rollup/rollup-linux-s390x-gnu': 4.62.3
+      '@rollup/rollup-linux-x64-gnu': 4.62.3
+      '@rollup/rollup-linux-x64-musl': 4.62.3
+      '@rollup/rollup-openbsd-x64': 4.62.3
+      '@rollup/rollup-openharmony-arm64': 4.62.3
+      '@rollup/rollup-win32-arm64-msvc': 4.62.3
+      '@rollup/rollup-win32-ia32-msvc': 4.62.3
+      '@rollup/rollup-win32-x64-gnu': 4.62.3
+      '@rollup/rollup-win32-x64-msvc': 4.62.3
+      fsevents: 2.3.3
+
+  scheduler@0.27.0: {}
+
+  semver@6.3.1: {}
+
+  source-map-js@1.2.1: {}
+
+  tinyglobby@0.2.17:
+    dependencies:
+      fdir: 6.5.0(picomatch@4.0.5)
+      picomatch: 4.0.5
+
+  typescript@5.9.3: {}
+
+  update-browserslist-db@1.2.3(browserslist@4.28.7):
+    dependencies:
+      browserslist: 4.28.7
+      escalade: 3.2.0
+      picocolors: 1.1.1
+
+  vite@6.4.3:
+    dependencies:
+      esbuild: 0.25.12
+      fdir: 6.5.0(picomatch@4.0.5)
+      picomatch: 4.0.5
+      postcss: 8.5.23
+      rollup: 4.62.3
+      tinyglobby: 0.2.17
+    optionalDependencies:
+      fsevents: 2.3.3
+
+  yallist@3.1.1: {}
+
+================================================================================
+文件: frontend/index.html
+路径: ./frontend/index.html
+--------------------------------------------------------------------------------
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f1ea" />
+    <meta
+      name="description"
+      content="启明智手语音交互控制台，让语音指令、环境理解和机械臂执行自然衔接。"
+    />
+    <title>启明智手 · 语音控制台</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+================================================================================
+文件: frontend/pnpm-workspace.yaml
+路径: ./frontend/pnpm-workspace.yaml
+--------------------------------------------------------------------------------
+allowBuilds:
+  esbuild: true
+
+================================================================================
+文件: frontend/package.json
+路径: ./frontend/package.json
+--------------------------------------------------------------------------------
+{
+  "name": "qiming-smart-hand-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.3",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}
+
+================================================================================
+文件: frontend/tsconfig.app.json
+路径: ./frontend/tsconfig.app.json
+--------------------------------------------------------------------------------
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx"
+  },
+  "include": ["src"]
+}
+
+================================================================================
+文件: frontend/tsconfig.node.json
+路径: ./frontend/tsconfig.node.json
+--------------------------------------------------------------------------------
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": ["vite.config.ts"]
+}
+
+================================================================================
+文件: frontend/.gitignore
+路径: ./frontend/.gitignore
+--------------------------------------------------------------------------------
+node_modules
+dist
+.DS_Store
+*.local
+*.tsbuildinfo
+
+================================================================================
+文件: frontend/src/styles.css
+路径: ./frontend/src/styles.css
+--------------------------------------------------------------------------------
+:root {
+  font-family: "Segoe UI", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  color: #20211e;
+  background: #f1efe9;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --ink: #20211e;
+  --muted: #797a74;
+  --line: rgba(32, 33, 30, 0.13);
+  --paper: #f7f5f0;
+  --orange: #ed5c2b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-width: 320px;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: #f1efe9;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid rgba(237, 92, 43, 0.3);
+  outline-offset: 3px;
+}
+
+.app-shell {
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.3)),
+    #eeece6;
+}
+
+.topbar {
+  height: 70px;
+  padding: 0 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  z-index: 5;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand,
+.header-actions,
+.connection,
+.emergency {
+  display: flex;
+  align-items: center;
+}
+
+.brand {
+  gap: 10px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: var(--ink);
+  border-radius: 10px;
+}
+
+.brand > span:last-child {
+  display: grid;
+  gap: 1px;
+}
+
+.brand strong {
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+.brand small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.header-actions {
+  gap: 20px;
+}
+
+.connection {
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.connection i {
+  width: 6px;
+  height: 6px;
+  background: #78a24b;
+  border-radius: 50%;
+}
+
+.emergency {
+  gap: 6px;
+  padding: 0;
+  color: #aa422c;
+  background: none;
+  border: 0;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.conversation-layout {
+  width: min(960px, calc(100% - 90px));
+  min-height: calc(100vh - 70px);
+  margin: 0 auto;
+  padding: 42px 0 24px;
+  display: grid;
+  grid-template-rows: auto minmax(300px, 1fr) auto auto auto;
+}
+
+.conversation-header {
+  padding-bottom: 20px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+
+.conversation-header > div > span,
+.drawer-title > span {
+  color: var(--orange);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.conversation-header h1 {
+  margin: 8px 0 0;
+  font-size: 29px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.conversation-header button {
+  padding: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.conversation-stream {
+  padding: clamp(28px, 5vh, 52px) 0;
+  overflow-y: auto;
+}
+
+.empty-conversation {
+  height: 100%;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-conversation > span {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  color: #8e8f88;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+
+.empty-conversation h2 {
+  margin: 16px 0 0;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.empty-conversation p {
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+
+.turn {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  border-bottom: 1px solid var(--line);
+}
+
+.turn-meta {
+  padding: 22px 18px 22px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.turn-meta > span {
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.turn-meta small {
+  color: #9a9b95;
+  font-size: 8px;
+}
+
+.agent-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.turn-content {
+  padding: 22px 0;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.turn-content p {
+  margin: 0;
+}
+
+.pending-copy {
+  color: var(--muted);
+}
+
+.listening-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+}
+
+.listening-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--orange);
+  border-radius: 50%;
+  animation: blink 1.1s ease-in-out infinite;
+}
+
+.voice-composer {
+  min-height: 76px;
+  padding: 0 12px 0 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--line);
+}
+
+.voice-status {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.voice-status > span:last-child {
+  display: grid;
+  gap: 4px;
+}
+
+.voice-status strong {
+  font-size: 12px;
+}
+
+.voice-status small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.voice-bars {
+  width: 54px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.voice-bars i {
+  width: 2px;
+  height: 5px;
+  background: #bfc0ba;
+  border-radius: 3px;
+}
+
+.voice-composer.recording .voice-bars i {
+  background: var(--orange);
+  animation: bars 0.65s ease-in-out infinite alternate;
+  animation-delay: calc(var(--i) * -55ms);
+}
+
+.mic-button {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: var(--orange);
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 9px 20px rgba(194, 68, 26, 0.2);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.mic-button:hover {
+  transform: translateY(-2px);
+}
+
+.stop-square {
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 4px;
+}
+
+.permission-notice {
+  margin: 10px 0 0;
+  color: #a14629;
+  font-size: 10px;
+  text-align: right;
+}
+
+.interface-note {
+  padding-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 22px;
+  color: #9d9e98;
+  font-size: 8px;
+}
+
+.interface-note span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.control-drawer {
+  width: min(410px, calc(100vw - 34px));
+  height: calc(100vh - 70px);
+  position: fixed;
+  top: 70px;
+  right: 0;
+  z-index: 10;
+  color: white;
+  background: rgba(31, 32, 29, 0.98);
+  transform: translateX(calc(100% - 23px));
+  transition: transform 0.38s cubic-bezier(0.22, 0.85, 0.28, 1);
+}
+
+.control-drawer.open,
+.control-drawer:focus-within {
+  transform: translateX(0);
+  box-shadow: -18px 0 45px rgba(31, 32, 29, 0.13);
+}
+
+.drawer-handle {
+  width: 23px;
+  height: 132px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  color: #d4d3ce;
+  background: transparent;
+  border: 0;
+  border-left: 2px solid var(--orange);
+  cursor: pointer;
+}
+
+.drawer-handle span {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  writing-mode: vertical-rl;
+}
+
+.drawer-content {
+  height: 100%;
+  padding: 44px 34px 28px 55px;
+  overflow-y: auto;
+}
+
+.drawer-title h2 {
+  margin: 8px 0 0;
+  font-size: 25px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.console-section {
+  margin-top: 40px;
+}
+
+.section-label {
+  padding-bottom: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.13);
+}
+
+.section-label span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.section-label small {
+  color: #90918b;
+  font-size: 8px;
+}
+
+.task-fields {
+  margin: 19px 0 0;
+}
+
+.task-fields > div {
+  min-height: 35px;
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  align-items: center;
+}
+
+.task-fields dt {
+  color: #92938d;
+  font-size: 9px;
+}
+
+.task-fields dd {
+  margin: 0;
+  font-size: 11px;
+}
+
+.empty-task {
+  margin: 15px 0 0;
+  color: #91928c;
+  font-size: 9px;
+  line-height: 1.65;
+}
+
+.event-stream {
+  margin-top: 17px;
+}
+
+.event-stream > div {
+  min-height: 50px;
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  position: relative;
+}
+
+.event-stream > div:not(:last-child)::after {
+  content: "";
+  width: 1px;
+  position: absolute;
+  top: 12px;
+  bottom: -4px;
+  left: 4px;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.event-stream i {
+  width: 9px;
+  height: 9px;
+  margin-top: 3px;
+  z-index: 1;
+  background: #555751;
+  border: 2px solid #20211e;
+  border-radius: 50%;
+}
+
+.event-stream .complete i {
+  background: #8db45c;
+}
+
+.event-stream .active i {
+  background: var(--orange);
+  box-shadow: 0 0 0 4px rgba(237, 92, 43, 0.1);
+  animation: blink 1.1s ease-in-out infinite;
+}
+
+.event-stream > div > span {
+  display: grid;
+  gap: 3px;
+}
+
+.event-stream strong {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.event-stream small {
+  color: #7f817a;
+  font-size: 8px;
+}
+
+.devices > div:not(.section-label) {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.devices > div > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #c2c2bd;
+  font-size: 9px;
+}
+
+.devices > div > small {
+  color: #80817c;
+  font-size: 8px;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes bars {
+  to {
+    height: calc(7px + var(--i) * 1.4px);
+    opacity: 0.45;
+  }
+}
+
+@media (max-width: 700px) {
+  .topbar {
+    height: 64px;
+    padding: 0 18px;
+  }
+
+  .connection {
+    display: none;
+  }
+
+  .emergency {
+    width: 36px;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  .conversation-layout {
+    width: calc(100% - 44px);
+    min-height: calc(100vh - 64px);
+    padding-top: 30px;
+  }
+
+  .turn {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .voice-composer {
+    padding-left: 12px;
+  }
+
+  .interface-note span:first-child {
+    display: none;
+  }
+
+  .control-drawer {
+    top: 64px;
+    height: calc(100vh - 64px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+================================================================================
+文件: frontend/src/App.tsx
+路径: ./frontend/src/App.tsx
+--------------------------------------------------------------------------------
+import {
+  AudioLines,
+  Bot,
+  ChevronLeft,
+  CircleStop,
+  Cpu,
+  Mic,
+  RefreshCw,
+  Volume2,
+  Waves,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+
+type SessionState = "idle" | "recording" | "waiting";
+
+export default function App() {
+  const [state, setState] = useState<SessionState>("idle");
+  const [elapsed, setElapsed] = useState(0);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [notice, setNotice] = useState("");
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    },
+    [],
+  );
+
+  const resetSession = () => {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    recorderRef.current = null;
+    streamRef.current = null;
+    timerRef.current = null;
+    setElapsed(0);
+    setNotice("");
+    setState("idle");
+  };
+
+  const stopRecording = () => {
+    recorderRef.current?.stop();
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = null;
+    setState("waiting");
+  };
+
+  const toggleRecording = async () => {
+    setNotice("");
+    if (state === "recording") {
+      stopRecording();
+      return;
+    }
+    if (state === "waiting") {
+      resetSession();
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setNotice("当前浏览器不支持麦克风录入。");
+      return;
+    }
+
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+      streamRef.current = mediaStream;
+      recorderRef.current = new MediaRecorder(mediaStream);
+      recorderRef.current.start();
+      setState("recording");
+      setElapsed(0);
+      timerRef.current = window.setInterval(
+        () => setElapsed((value) => value + 1),
+        1000,
+      );
+    } catch {
+      setNotice("未获得麦克风权限，请允许访问后重试。");
+    }
+  };
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <a className="brand" href="#" aria-label="启明智手首页">
+          <span className="brand-mark">
+            <Waves size={21} />
+          </span>
+          <span>
+            <strong>启明智手</strong>
+            <small>语音智能机械臂</small>
+          </span>
+        </a>
+
+        <div className="header-actions">
+          <span className="connection">
+            <i />
+            前端已就绪
+          </span>
+          <button className="emergency" type="button">
+            <CircleStop size={17} />
+            紧急停止
+          </button>
+        </div>
+      </header>
+
+      <section className="conversation-layout">
+        <div className="conversation-header">
+          <div>
+            <span>CONVERSATION</span>
+            <h1>与启明对话</h1>
+          </div>
+          <button type="button" onClick={resetSession}>
+            <RefreshCw size={15} />
+            新建会话
+          </button>
+        </div>
+
+        <div className="conversation-stream" aria-live="polite">
+          {state === "idle" && (
+            <div className="empty-conversation">
+              <span>
+                <AudioLines size={27} />
+              </span>
+              <h2>从一次语音开始</h2>
+              <p>录音转写、Agent 回复和必要的确认信息会显示在这里。</p>
+            </div>
+          )}
+
+          {state !== "idle" && (
+            <>
+              <div className="turn user-turn">
+                <div className="turn-meta">
+                  <span>你</span>
+                  <small>{state === "recording" ? "正在输入" : "语音输入"}</small>
+                </div>
+                <div className="turn-content">
+                  {state === "recording" ? (
+                    <div className="listening-line">
+                      <span className="listening-dot" />
+                      正在录音，等待 STT 返回实时转写文本
+                    </div>
+                  ) : (
+                    <p className="pending-copy">语音已录入，等待 STT 服务返回文本。</p>
+                  )}
+                </div>
+              </div>
+
+              {state === "waiting" && (
+                <div className="turn agent-turn">
+                  <div className="turn-meta">
+                    <span className="agent-name">
+                      <Bot size={14} />
+                      启明
+                    </span>
+                    <small>系统提示</small>
+                  </div>
+                  <div className="turn-content">
+                    <p>
+                      STT 与 Agent 服务尚未接入，当前无法生成转写结果或回复。
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className={`voice-composer ${state}`}>
+          <div className="voice-status">
+            <span className="voice-bars" aria-hidden="true">
+              {Array.from({ length: 9 }, (_, index) => (
+                <i key={index} style={{ "--i": index } as React.CSSProperties} />
+              ))}
+            </span>
+            <span>
+              <strong>
+                {state === "recording"
+                  ? `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(
+                      elapsed % 60,
+                    ).padStart(2, "0")}`
+                  : state === "waiting"
+                    ? "音频已接收"
+                    : "语音输入"}
+              </strong>
+              <small>
+                {state === "recording"
+                  ? "再次点击结束录音"
+                  : state === "waiting"
+                    ? "点击重新录入"
+                    : "点击麦克风开始说话"}
+              </small>
+            </span>
+          </div>
+
+          <button
+            type="button"
+            className="mic-button"
+            onClick={toggleRecording}
+            aria-label={
+              state === "recording"
+                ? "结束语音录入"
+                : state === "waiting"
+                  ? "重新录入"
+                  : "开始语音录入"
+            }
+          >
+            {state === "recording" ? (
+              <span className="stop-square" />
+            ) : state === "waiting" ? (
+              <RefreshCw size={20} />
+            ) : (
+              <Mic size={21} />
+            )}
+          </button>
+        </div>
+
+        {notice && (
+          <p className="permission-notice" role="status">
+            {notice}
+          </p>
+        )}
+
+        <footer className="interface-note">
+          <span>STT · 未接入</span>
+          <span>Agent · 未接入</span>
+          <span>
+            <Volume2 size={12} />
+            TTS · 未接入
+          </span>
+        </footer>
+      </section>
+
+      <aside
+        className={`control-drawer ${drawerOpen ? "open" : ""}`}
+        onMouseEnter={() => setDrawerOpen(true)}
+        onMouseLeave={() => setDrawerOpen(false)}
+      >
+        <button
+          type="button"
+          className="drawer-handle"
+          onClick={() => setDrawerOpen((value) => !value)}
+          onFocus={() => setDrawerOpen(true)}
+          aria-expanded={drawerOpen}
+          aria-controls="agent-console"
+        >
+          <ChevronLeft size={17} />
+          <span>控制台</span>
+        </button>
+
+        <div className="drawer-content" id="agent-console">
+          <div className="drawer-title">
+            <span>AGENT CONSOLE</span>
+            <h2>任务控制台</h2>
+          </div>
+
+          <section className="console-section">
+            <div className="section-label">
+              <span>当前任务</span>
+              <small>
+                {state === "idle"
+                  ? "暂无"
+                  : state === "recording"
+                    ? "录入中"
+                    : "等待后端"}
+              </small>
+            </div>
+            <dl className="task-fields">
+              <div>
+                <dt>意图</dt>
+                <dd>—</dd>
+              </div>
+              <div>
+                <dt>目标</dt>
+                <dd>—</dd>
+              </div>
+              <div>
+                <dt>动作参数</dt>
+                <dd>—</dd>
+              </div>
+            </dl>
+            <p className="empty-task">
+              {state === "idle"
+                ? "收到有效的 Agent 输出后，这里将展示结构化任务。"
+                : state === "recording"
+                  ? "正在采集语音，尚未生成任务。"
+                  : "等待 STT 与 Agent 接口返回任务数据。"}
+            </p>
+          </section>
+
+          <section className="console-section">
+            <div className="section-label">
+              <span>执行事件</span>
+              <small>实时</small>
+            </div>
+            <div className="event-stream">
+              <div className={state !== "idle" ? "complete" : ""}>
+                <i />
+                <span>
+                  <strong>等待语音输入</strong>
+                  <small>{state !== "idle" ? "已完成" : "当前状态"}</small>
+                </span>
+              </div>
+              <div className={state === "recording" ? "active" : state === "waiting" ? "complete" : ""}>
+                <i />
+                <span>
+                  <strong>采集麦克风音频</strong>
+                  <small>
+                    {state === "recording"
+                      ? "进行中"
+                      : state === "waiting"
+                        ? "已完成"
+                        : "等待"}
+                  </small>
+                </span>
+              </div>
+              <div className={state === "waiting" ? "active" : ""}>
+                <i />
+                <span>
+                  <strong>语音转写与意图识别</strong>
+                  <small>{state === "waiting" ? "等待接口" : "等待"}</small>
+                </span>
+              </div>
+              <div>
+                <i />
+                <span>
+                  <strong>机械臂执行</strong>
+                  <small>等待</small>
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section className="console-section devices">
+            <div className="section-label">
+              <span>服务状态</span>
+            </div>
+            <div>
+              <span>
+                <Cpu size={15} />
+                后端服务
+              </span>
+              <small>未连接</small>
+            </div>
+            <div>
+              <span>
+                <Bot size={15} />
+                机械臂
+              </span>
+              <small>状态不可用</small>
+            </div>
+          </section>
+        </div>
+      </aside>
+    </main>
+  );
+}
+
+================================================================================
+文件: frontend/src/main.tsx
+路径: ./frontend/src/main.tsx
+--------------------------------------------------------------------------------
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./styles.css";
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+);
+
+================================================================================
+文件: docs/system_flow.md
+路径: ./docs/system_flow.md
+--------------------------------------------------------------------------------
+# 系统简化流程图
+
+本项目当前目标是跑通一个简易闭环：
+全语音控制 + 摄像头拍图 + MLLM 识别理解 + 机械臂执行动作
+
+## 核心流程
+
+```mermaid
+flowchart TD
+    A["用户语音指令<br/>例如：帮我拿水杯"] --> B["ASR 语音识别"]
+    B --> C["得到文本指令<br/>帮我拿水杯"]
+    C --> D["摄像头拍照"]
+    D --> E["MLLM 多模态理解"]
+
+    C --> E
+
+    E --> F["识别目标物体<br/>水杯"]
+    E --> G["判断物体位置"]
+    E --> H["生成动作意图<br/>抓取并递给用户"]
+
+    F --> I["坐标转换"]
+    G --> I
+
+    I --> J["机械臂控制"]
+    H --> J
+
+    J --> K["执行抓取流程"]
+    K --> L["TTS 语音反馈<br/>我已经拿到水杯了"]
+```
+
+
+```mermaid
+flowchart LR
+    A["语音输入"] --> B["ASR"]
+    B --> C["文本指令"]
+    C --> D["摄像头图像"]
+    D --> E["MLLM 识别与决策"]
+    C --> E
+    E --> F["目标坐标"]
+    F --> G["机械臂执行"]
+    G --> H["TTS 反馈"]
+```
+
+## 文字说明
+
+系统首先通过麦克风接收用户语音指令，并由 ASR 模块将语音转换为文本。随后摄像头采集当前环境图像，将文本指令和图像一起输入 MLLM。
+
+MLLM 负责理解用户想要操作的目标物体，并结合图像判断物体位置，输出动作意图和目标位置信息。系统再将图像位置转换为机械臂可用坐标，驱动机械臂完成抓取、移动和递送动作。
+
+动作完成后，系统通过 TTS 向用户播报执行结果。
+
+```text
+用户说话 -> 语音转文本 -> 摄像头拍图 -> MLLM 识别目标和位置 -> 转换机械臂坐标 -> 执行抓取 -> 语音播报结果
+```
+
+## 对应项目板块
+
+当前简化流程只需要优先使用几个核心板块，其他模块可以暂时不展开。
+
+| 简化流程步骤 | 使用的项目板块 | 对应功能 |
+| --- | --- | --- |
+| 用户语音输入 | `speech` | 接收麦克风输入 |
+| ASR 语音识别 | `speech` | 把语音转成文本 |
+| 摄像头拍照 | `vison` | 调用摄像头获取图像 |
+| MLLM 识别与决策 | `mllm` | 理解用户指令和图像，判断要拿什么、怎么做 |
+| 目标位置判断 | `vision` | 从图像结果中得到物体位置 |
+| 坐标转换 | `vision` | 把图像坐标转换成机械臂坐标 |
+| 机械臂执行 | `arm_control` | 控制 MyCobot 移动和夹爪抓取 |
+| TTS 语音反馈 | `feedback` | 把执行结果播报给用户 |
+
+## 模块职责
+
+```text
+speech
+  负责输入：
+  - 麦克风输入
+  - 转换为文字
+  
+mllm
+  负责理解：
+  - 用户想干什么
+  - 图像里有什么
+  - 要执行什么动作
+
+vision
+  负责定位：
+  - 目标物体在哪里
+  - 图像位置如何变成机械臂坐标
+  - 摄像头拍照
+
+arm_control
+  负责执行：
+  - 移动机械臂
+  - 打开/关闭夹爪
+  - 抓取和递送
+
+feedback
+  负责输出：
+  - TTS 语音播报执行结果
+```
+
+## 待定的模块
+
+```text
+cloud
+  暂时不需要重点实现。
+  只有当 MLLM 使用远程 API，并且需要单独管理云端请求时，再展开该模块。
+
+safety
+  可以保留最简单的急停和坐标范围检查。
+  暂时不需要复杂安全状态机。
+
+utils
+  只作为辅助工具，例如读取配置文件。
+
+scripts
+  只用于后续编写简单演示启动脚本。
+```
+
+## 代码链路
+
+```text
+main.py
+  -> speech 采集语音
+  -> vision 采集图像
+  -> mllm 调用 MLLM 识别图像并理解指令
+  -> vision 转换目标坐标
+  -> arm_control 控制机械臂抓取
+  -> feedback 播报结果
+```
+
+
+
+================================================================================
+文件: config/llm.yaml
+路径: ./config/llm.yaml
+--------------------------------------------------------------------------------
+llm:
+  mode: "mock"
+  request_timeout_s: 8
+  endpoint: ""
+  model_name: ""
+
+================================================================================
+文件: config/robot.yaml
+路径: ./config/robot.yaml
+--------------------------------------------------------------------------------
+robot:
+  model: "myCobot320PI"
+  mode: "mock"
+  port: "/dev/ttyAMA0"
+  baudrate: 1000000
+  default_speed: 35
+  handover_coords: [80.0, -220.0, 180.0, 0.0, 0.0, 0.0]
+  gripper:
+    open_value: 80
+    close_value: 20
+  camera:
+    sdk_path: "D:\\Documnet\\Other material\\3D摄像头客户资料\\驱动程序及SDK开发\\windows\\OpenNI2 SDK\\Windows_V2.3.0\\windows\\SDK\\x64\\Redist"
+    calibration_img_dir: "D:\\camera_images"
+    chessboard_size: [9, 6]
+    square_size: 0.025
+
+================================================================================
+文件: scripts/init_db.py
+路径: ./scripts/init_db.py
+--------------------------------------------------------------------------------
+
+
+================================================================================
+文件: scripts/demo_text_command.py
+路径: ./scripts/demo_text_command.py
+--------------------------------------------------------------------------------
+# -*- coding: utf-8 -*-
+"""通过脚本入口运行文本指令演示。"""
+
+from __future__ import annotations
+
+from src.main import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+================================================================================
+文件: src/__init__.py
+路径: ./src/__init__.py
+--------------------------------------------------------------------------------
+"""用于模块化运行的应用入口包。"""
+
+================================================================================
+文件: src/main.py
+路径: ./src/main.py
+--------------------------------------------------------------------------------
+# -*- coding: utf-8 -*-
+# 功能：项目最小流程入口，串联语音输入、摄像头拍照、MLLM 决策、坐标转换、机械臂执行和语音反馈。
+
+from __future__ import annotations
+
+import argparse
+import cv2
+
+from src.qiming.arm_control.controller import ArmController
+from src.qiming.arm_control.mycobot_driver import MyCobotDriver
+from src.qiming.arm_control.mock_driver import MockArmDriver
+from src.qiming.feedback.tts import TtsFeedback
+from src.qiming.mllm.recognizer import MllmRecognizer
+from src.qiming.speech.voice import VoiceIO
+from src.qiming.utils.config import load_yaml
+from src.qiming.vision.camera import Camera
+from src.qiming.vision.depth_camera import DepthCamera
+from src.qiming.vision.coordinate import CoordinateConverter
+from src.qiming.vision.detection import YoloDetector
+from src.qiming.vision.calibration import HandEyeCalibrator
+
+
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="运行启明智手简化流程。")
+    parser.add_argument("--text", help="用文本模拟语音指令。")
+    parser.add_argument("--calibrate", action="store_true", help="执行手眼标定流程。")
+    parser.add_argument("--show-frame", action="store_true", help="显示摄像头画面。")
+    return parser
+
+
+def main() -> int:
+    args = build_arg_parser().parse_args()
+    robot_cfg = load_yaml("config/robot.yaml")["robot"]
+    llm_cfg = load_yaml("config/llm.yaml")["llm"]
+    camera_cfg = robot_cfg.get("camera", {})
+
+    voice = VoiceIO()
+    feedback = TtsFeedback()
+
+    mode = robot_cfg.get("mode", "mock")
+    if mode == "real":
+        arm_driver = MyCobotDriver(robot_cfg)
+    else:
+        arm_driver = MockArmDriver(robot_cfg)
+
+    depth_camera = DepthCamera(camera_cfg)
+    detector = YoloDetector()
+    mllm = MllmRecognizer(llm_cfg)
+    converter = CoordinateConverter(depth_camera, arm_driver)
+    arm = ArmController(arm_driver)
+
+    if args.calibrate:
+        print("开始手眼标定流程...")
+        calibrator = HandEyeCalibrator(depth_camera, arm_driver)
+        calibrator.run_full_calibration()
+        feedback.say("手眼标定完成。")
+        return 0
+
+    if args.show_frame:
+        print("显示摄像头画面，按 'q' 退出...")
+        if not depth_camera.open_camera():
+            print("相机打开失败")
+            return 1
+        while True:
+            color_frame, depth_frame = depth_camera.get_frames()
+            if color_frame is None:
+                break
+            results = detector.yolo_model(color_frame, conf=0.5, verbose=False)
+            annotated_frame = results[0].plot()
+            cv2.imshow('yolo_detection', annotated_frame)
+            dpt_vis = cv2.normalize(depth_frame, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+            cv2.imshow('depth', dpt_vis)
+            key = cv2.waitKey(1)
+            if int(key) == ord('q'):
+                break
+        depth_camera.close_camera()
+        cv2.destroyAllWindows()
+        return 0
+
+    user_text = args.text or voice.listen()
+    image = depth_camera.capture()
+
+    decision = mllm.recognize(user_text, image)
+
+    if decision is None:
+        feedback.say("没有识别到可以执行的动作。")
+        return 1
+
+    action = converter.to_arm_action(decision, robot_cfg["handover_coords"])
+    result = arm.execute(action)
+    feedback.say(result)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+================================================================================
+文件: src/qiming_smart_hand.egg-info/PKG-INFO
+路径: ./src/qiming_smart_hand.egg-info/PKG-INFO
+--------------------------------------------------------------------------------
+Metadata-Version: 2.4
+Name: qiming-smart-hand
+Version: 0.1.0
+Summary: MLLM-based assistive robotic arm framework for visually impaired users.
+Requires-Python: >=3.10
+Requires-Dist: pymycobot>=3.6.0
+Requires-Dist: pyyaml>=6.0.0
+Requires-Dist: fastapi>=0.100.0
+Requires-Dist: uvicorn[standard]>=0.23.0
+Requires-Dist: sqlalchemy>=2.0.0
+Requires-Dist: aiosqlite>=0.19.0
+Requires-Dist: asyncpg>=0.29.0
+Requires-Dist: psycopg2-binary>=2.9.0
+
+================================================================================
+文件: src/qiming_smart_hand.egg-info/SOURCES.txt
+路径: ./src/qiming_smart_hand.egg-info/SOURCES.txt
+--------------------------------------------------------------------------------
+README.md
+pyproject.toml
+src/__init__.py
+src/main.py
+src/api/app.py
+src/qiming/__init__.py
+src/qiming/models.py
+src/qiming/arm_control/__init__.py
+src/qiming/arm_control/controller.py
+src/qiming/arm_control/driver.py
+src/qiming/arm_control/grasp.py
+src/qiming/arm_control/mock_driver.py
+src/qiming/arm_control/mycobot_driver.py
+src/qiming/database/__init__.py
+src/qiming/database/connection.py
+src/qiming/database/models.py
+src/qiming/feedback/tts.py
+src/qiming/mllm/__init__.py
+src/qiming/mllm/client.py
+src/qiming/mllm/recognizer.py
+src/qiming/speech/__init__.py
+src/qiming/speech/asr.py
+src/qiming/speech/voice.py
+src/qiming/utils/__init__.py
+src/qiming/utils/config.py
+src/qiming/utils/logging.py
+src/qiming/vision/__init__.py
+src/qiming/vision/camera.py
+src/qiming/vision/coordinate.py
+src/qiming_smart_hand.egg-info/PKG-INFO
+src/qiming_smart_hand.egg-info/SOURCES.txt
+src/qiming_smart_hand.egg-info/dependency_links.txt
+src/qiming_smart_hand.egg-info/requires.txt
+src/qiming_smart_hand.egg-info/top_level.txt
+
+================================================================================
+文件: src/qiming_smart_hand.egg-info/requires.txt
+路径: ./src/qiming_smart_hand.egg-info/requires.txt
+--------------------------------------------------------------------------------
+pymycobot>=3.6.0
+pyyaml>=6.0.0
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+sqlalchemy>=2.0.0
+aiosqlite>=0.19.0
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.0
+
+================================================================================
+文件: src/qiming_smart_hand.egg-info/top_level.txt
+路径: ./src/qiming_smart_hand.egg-info/top_level.txt
+--------------------------------------------------------------------------------
+__init__
+api
+main
+qiming
+
+================================================================================
+文件: src/qiming_smart_hand.egg-info/dependency_links.txt
+路径: ./src/qiming_smart_hand.egg-info/dependency_links.txt
+--------------------------------------------------------------------------------
+
+
+================================================================================
+文件: src/qiming/__init__.py
+路径: ./src/qiming/__init__.py
+--------------------------------------------------------------------------------
+"""启明智手核心包。"""
+
+================================================================================
+文件: src/qiming/models.py
+路径: ./src/qiming/models.py
+--------------------------------------------------------------------------------
+# -*- coding: utf-8 -*-
+# 功能：定义简化流程中各模块之间传递的基础数据结构。
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, List, Optional, Tuple
+
+
+Pose = Tuple[float, float, float, float, float, float]
+
+
+@dataclass
+class ImageFrame:
+    """摄像头采集到的一帧图像。"""
+
+    data: Optional[Any] = None
+    color_frame: Optional[Any] = None
+    depth_frame: Optional[Any] = None
+
+
+@dataclass
+class DetectedObject:
+    """检测到的目标物体信息。"""
+
+    class_name: str
+    coordinates: Tuple[float, float, float, float]
+    confidence: float
+    center: Tuple[float, float]
+
+
+@dataclass
+class DetectionResult:
+    """YOLO检测结果。"""
+
+    success: bool
+    detected: bool
+    objects: Optional[List[DetectedObject]] = None
+    message: Optional[str] = None
+
+
+@dataclass
+class MllmDecision:
+    """MLLM 对图像和用户指令的理解结果。"""
+
+    target_name: str
+    image_position: Optional[Tuple[float, float]]
+    intent: str
+    reply: str
+
+
+@dataclass
+class ArmAction:
+    """传递给机械臂执行层的动作。"""
+
+    target_name: str
+    pick_pose: Pose
+    place_pose: Pose
+    reply: str
+
+================================================================================
+文件: src/qiming/database/connection.py
+路径: ./src/qiming/database/connection.py
+--------------------------------------------------------------------------------
+
+
+================================================================================
+文件: src/qiming/database/__init__.py
+路径: ./src/qiming/database/__init__.py
+--------------------------------------------------------------------------------
+
+
+================================================================================
+文件: src/qiming/database/models.py
+路径: ./src/qiming/database/models.py
+--------------------------------------------------------------------------------
+
+
+================================================================================
+文件: src/qiming/arm_control/controller.py
+路径: ./src/qiming/arm_control/controller.py
+--------------------------------------------------------------------------------
+"""机械臂动作执行入口，负责把抓取动作转换为夹爪和移动指令。"""
+
+from __future__ import annotations
+
+from src.qiming.arm_control.driver import ArmDriver
+from src.qiming.arm_control.mock_driver import MockArmDriver
+from src.qiming.arm_control.mycobot_driver import MyCobotDriver
+from src.qiming.models import ArmAction
+
+
+class ArmController:
+    """机械臂执行层。"""
+
+    def __init__(self, driver: ArmDriver) -> None:
+        self.driver = driver
+
+    @classmethod
+    def from_config(cls, robot_cfg: dict) -> "ArmController":
+        mode = robot_cfg.get("mode", "mock")
+        if mode == "real":
+            return cls(MyCobotDriver(robot_cfg))
+        return cls(MockArmDriver(robot_cfg))
+
+    def execute(self, action: ArmAction) -> str:
+        self.driver.open_gripper()
+        self.driver.move_to(action.pick_pose)
+        self.driver.close_gripper()
+        self.driver.move_to(action.place_pose)
+        self.driver.open_gripper()
+        return action.reply
+
+================================================================================
+文件: src/qiming/arm_control/mycobot_driver.py
+路径: ./src/qiming/arm_control/mycobot_driver.py
+--------------------------------------------------------------------------------
+from __future__ import annotations
+
+import math
+import time
+import numpy as np
+
+from pymycobot import MyCobot320, PI_PORT
+
+from src.qiming.models import Pose
+
+
+class MyCobotDriver:
+    def __init__(self, robot_cfg: dict) -> None:
+        self.robot_cfg = robot_cfg
+        self.port = robot_cfg.get("port", PI_PORT)
+        self.baudrate = robot_cfg.get("baudrate", 115200)
+        self.default_speed = robot_cfg.get("default_speed", 35)
+        self.gripper_config = robot_cfg.get("gripper", {})
+        self.mc = None
+        self._connect()
+
+    def _connect(self) -> None:
+        try:
+            self.mc = MyCobot320(self.port, self.baudrate)
+            self.mc.set_fresh_mode(0)
+            print(f"机械臂连接成功: {self.port} @ {self.baudrate}")
+        except Exception as e:
+            print(f"机械臂连接失败: {str(e)}")
+            self.mc = None
+
+    def move_to(self, pose: Pose) -> None:
+        if self.mc is None:
+            print("[机械臂] 未连接，跳过移动")
+            return
+        x, y, z, rx, ry, rz = pose
+        self.mc.send_coords([x, y, z, rx, ry, rz], self.default_speed)
+        time.sleep(2)
+
+    def open_gripper(self) -> None:
+        if self.mc is None:
+            print("[机械臂] 未连接，跳过打开夹爪")
+            return
+        try:
+            self.mc.set_gripper_mode(0)
+            self.mc.init_electric_gripper()
+            self.mc.set_gripper_state(0, 50, 4)
+            time.sleep(0.5)
+            print("[机械臂] 打开夹爪")
+        except Exception as e:
+            print(f"打开夹爪失败: {str(e)}")
+
+    def close_gripper(self) -> None:
+        if self.mc is None:
+            print("[机械臂] 未连接，跳过闭合夹爪")
+            return
+        try:
+            self.mc.set_gripper_mode(0)
+            self.mc.init_electric_gripper()
+            self.mc.set_gripper_state(1, 30, 4)
+            time.sleep(1.0)
+            print("[机械臂] 闭合夹爪")
+        except Exception as e:
+            print(f"闭合夹爪失败: {str(e)}")
+
+    def get_end2base_matrix(self, use_actual_robot=True):
+        def euler_to_rotation_matrix(rx, ry, rz, degrees=True):
+            if degrees:
+                rx = math.radians(rx)
+                ry = math.radians(ry)
+                rz = math.radians(rz)
+
+            Rz = np.array([
+                [math.cos(rz), -math.sin(rz), 0],
+                [math.sin(rz), math.cos(rz), 0],
+                [0, 0, 1]
+            ])
+
+            Ry = np.array([
+                [math.cos(ry), 0, math.sin(ry)],
+                [0, 1, 0],
+                [-math.sin(ry), 0, math.cos(ry)]
+            ])
+
+            Rx = np.array([
+                [1, 0, 0],
+                [0, math.cos(rx), -math.sin(rx)],
+                [0, math.sin(rx), math.cos(rx)]
+            ])
+
+            return Rz @ Ry @ Rx
+
+        def get_official_coords():
+            if use_actual_robot and self.mc is not None:
+                try:
+                    self.mc.set_reference_frame(0)
+                    self.mc.set_end_type(1)
+                    arm_coords = self.mc.get_coords()
+                    print("成功获取机械臂位姿数据")
+                    return arm_coords
+                except Exception as e:
+                    print(f"获取实际位姿失败: {e}，将使用示例数据")
+
+            return [100, 200, 300, 90, 0, 45]
+
+        arm_coords = get_official_coords()
+        print(f"获取的位姿数据: {arm_coords}")
+
+        x, y, z, rx, ry, rz = arm_coords
+
+        rotation_matrix = euler_to_rotation_matrix(rx, ry, rz)
+        translation_vector = np.array([x, y, z])
+
+        return rotation_matrix, translation_vector
+
+    def check_gripper(self):
+        if self.mc is None:
+            print("[机械臂] 未连接，跳过夹爪测试")
+            return False
+        try:
+            self.mc.set_gripper_mode(0)
+            self.mc.init_electric_gripper()
+
+            for i in range(2):
+                self.mc.set_gripper_state(1, 100, 4)
+                time.sleep(1)
+                self.mc.set_gripper_state(0, 100, 4)
+                time.sleep(1)
+
+            return True
+        except Exception as e:
+            print(f"夹爪测试错误: {str(e)}")
+            return False
+
+    def back_zero(self):
+        if self.mc is None:
+            print("[机械臂] 未连接，跳过归零")
+            return
+        print('机械臂归零')
+        self.mc.send_angles([0, 0, 0, 0, 0, 0], 40)
+        time.sleep(3)
+
+    def relax_arms(self):
+        if self.mc is None:
+            print("[机械臂] 未连接，跳过放松关节")
+            return
+        print('已放松机械臂关节')
+        self.mc.release_all_servos()
+
+    def move_to_coords(self, X=150, Y=-130, HEIGHT_SAFE=230):
+        if self.mc is None:
+            print("[机械臂] 未连接，跳过移动")
+            return
+        print('移动至指定坐标：X {} Y {}'.format(X, Y))
+        self.mc.send_coords([X, Y, HEIGHT_SAFE, 0, 180, 90], 20)
+        time.sleep(4)
+
+    def single_joint_move(self, joint_index, angle):
+        if self.mc is None:
+            print("[机械臂] 未连接，跳过关节移动")
+            return
+        print('关节 {} 旋转至 {} 度'.format(joint_index, angle))
+        self.mc.send_angle(joint_index, angle, 40)
+        time.sleep(2)
+
+    def move_to_top_view(self):
+        if self.mc is None:
+            print("[机械臂] 未连接，跳过俯视姿态")
+            return
+        print('移动至俯视姿态')
+        self.mc.send_angles([-62.13, 8.96, -87.71, -14.41, 2.54, -16.34], 10)
+        time.sleep(3)
+
+    def grab_and_place(self, grab_point, place_point):
+        if self.mc is None:
+            print("[机械臂] 未连接，跳过抓取放置")
+            return
+
+        init_angles = [0, 0, 0, 0, 0, 0]
+
+        self.mc.set_gripper_mode(0)
+        self.mc.init_electric_gripper()
+        self.mc.set_gripper_state(0, 50, 4)
+        time.sleep(1)
+
+        self.mc.send_angles(init_angles, 50)
+        time.sleep(2)
+
+        self.mc.send_coords([grab_point[0], grab_point[1], grab_point[2] + 70,
+                             grab_point[3], grab_point[4], grab_point[5]], 50, 1)
+        time.sleep(2)
+
+        self.mc.send_coords(grab_point, 30, 1)
+        time.sleep(2)
+
+        self.mc.set_gripper_state(1, 30, 4)
+        time.sleep(1.5)
+
+        self.mc.send_coords([grab_point[0], grab_point[1], grab_point[2] + 70,
+                             grab_point[3], grab_point[4], grab_point[5]], 40, 1)
+        time.sleep(2)
+
+        self.mc.send_coords([place_point[0], place_point[1], place_point[2] + 70,
+                             place_point[3], place_point[4], place_point[5]], 50, 1)
+        time.sleep(2)
+
+        self.mc.send_coords(place_point, 30, 1)
+        time.sleep(2)
+
+        self.mc.set_gripper_state(0, 30, 4)
+        time.sleep(1.5)
+
+        self.mc.send_coords([place_point[0], place_point[1], place_point[2] + 70,
+                             place_point[3], place_point[4], place_point[5]], 40, 1)
+        time.sleep(2)
+
+        self.mc.send_angles(init_angles, 50)
+        time.sleep(2)
+
+    def clamp_coords(self, coords):
+        x, y, z, rx, ry, rz = coords
+        x = float(np.clip(x, -350.0, 350.0))
+        y = float(np.clip(y, -350.0, 350.0))
+        z = float(np.clip(z, -41.0, 523.9))
+        rx = float(np.clip(rx, -180.0, 180.0))
+        ry = float(np.clip(ry, -180.0, 180.0))
+        rz = float(np.clip(rz, -180.0, 180.0))
+        return [x, y, z, rx, ry, rz]
+
+================================================================================
+文件: src/qiming/arm_control/__init__.py
+路径: ./src/qiming/arm_control/__init__.py
+--------------------------------------------------------------------------------
+"""机械臂控制模块。"""
+
+from .controller import ArmController
+from .driver import ArmDriver
+from .mycobot_driver import MyCobotDriver
+from .mock_driver import MockArmDriver
+
+================================================================================
+文件: src/qiming/arm_control/grasp.py
+路径: ./src/qiming/arm_control/grasp.py
+--------------------------------------------------------------------------------
+"""功能：抓取流程占位文件，后续可在这里细化“靠近、下降、夹取、抬起、递送”等动作步骤。"""
+
+from __future__ import annotations
+
+from typing import List
+
+from src.qiming.models import ArmAction
+
+
+class GraspFlow:
+    """抓取流程接口占位。"""
+
+    def build_steps(self, action: ArmAction) -> List[str]:
+        _ = action
+        return ["打开夹爪", "移动到目标", "闭合夹爪", "移动到递送点"]
+
+================================================================================
+文件: src/qiming/arm_control/driver.py
+路径: ./src/qiming/arm_control/driver.py
+--------------------------------------------------------------------------------
+"""定义机械臂驱动接口。"""
+
+from __future__ import annotations
+
+from typing import Protocol
+
+from src.qiming.models import Pose
+
+
+class ArmDriver(Protocol):
+    def move_to(self, pose: Pose) -> None:
+        ...
+
+    def open_gripper(self) -> None:
+        ...
+
+    def close_gripper(self) -> None:
+        ...
+
+================================================================================
+文件: src/qiming/arm_control/mock_driver.py
+路径: ./src/qiming/arm_control/mock_driver.py
+--------------------------------------------------------------------------------
+""" 功能：模拟机械臂驱动。"""
+
+from __future__ import annotations
+
+from src.qiming.models import Pose
+
+
+class MockArmDriver:
+    """无硬件调试阶段使用的机械臂模拟驱动。"""
+
+    def __init__(self, robot_cfg: dict) -> None:
+        self.robot_cfg = robot_cfg
+
+    def move_to(self, pose: Pose) -> None:
+        print(f"[机械臂] 移动到位姿：{pose}")
+
+    def open_gripper(self) -> None:
+        print("[机械臂] 打开夹爪")
+
+    def close_gripper(self) -> None:
+        print("[机械臂] 闭合夹爪")
+
+================================================================================
+文件: src/qiming/speech/__init__.py
+路径: ./src/qiming/speech/__init__.py
+--------------------------------------------------------------------------------
+"""语音输入与播报模块。"""
+
+================================================================================
+文件: src/qiming/speech/voice.py
+路径: ./src/qiming/speech/voice.py
+--------------------------------------------------------------------------------
+"""语音交互入口。"""
+
+from __future__ import annotations
+
+
+class VoiceIO:
+    """语音输入占位，后续替换为真实麦克风和 ASR。"""
+
+    def listen(self) -> str:
+        return input("请输入语音指令文本：")
+
+================================================================================
+文件: src/qiming/speech/asr.py
+路径: ./src/qiming/speech/asr.py
+--------------------------------------------------------------------------------
+"""ASR 语音识别"""
+
+from __future__ import annotations
+
+
+class AsrRecognizer:
+    """语音识别接口占位。"""
+
+    def recognize(self, audio_data: bytes) -> str:
+        _ = audio_data
+        raise NotImplementedError("后续在这里接入真实 ASR。")
+
+================================================================================
+文件: src/qiming/vision/depth_camera.py
+路径: ./src/qiming/vision/depth_camera.py
+--------------------------------------------------------------------------------
+from __future__ import annotations
+
+import os
+import glob
+
+from src.qiming.models import ImageFrame
+
+
+class DepthCamera:
+    def __init__(self, camera_cfg: dict):
+        self.intrinsic_matrix = None
+        self.dist_coeffs = None
+        self.T_cam2end = None
+        self.HandEye_calibration_img = camera_cfg.get("calibration_img_dir", r"D:\camera_images")
+        self.SDK_Path = camera_cfg.get("sdk_path", r"D:\Documnet\Other material\3D摄像头客户资料\驱动程序及SDK开发\windows\OpenNI2 SDK\Windows_V2.3.0\windows\SDK\x64\Redist")
+        self.all_rvec = []
+        self.all_tvec = []
+        self.calibration_objpoints = []
+        self.calibration_imgpoints = []
+        self.dev = None
+        self.depth_stream = None
+        self.color_stream = None
+        self.fail_data = []
+
+    def open_camera(self):
+        from openni import openni2
+
+        if not os.path.exists(self.SDK_Path):
+            print(f"错误：SDK路径不存在! 当前填写的路径是: {self.SDK_Path}")
+            return False
+        try:
+            openni2.initialize(self.SDK_Path)
+            self.dev = openni2.Device.open_any()
+
+            if self.dev.has_sensor(openni2.SENSOR_DEPTH):
+                self.depth_stream = self.dev.create_depth_stream()
+                self.depth_stream.start()
+                print("深度流启动成功")
+            else:
+                print("设备无深度传感器，无法启动深度流")
+                return False
+
+            if self.dev.has_sensor(openni2.SENSOR_COLOR):
+                self.color_stream = self.dev.create_color_stream()
+                self.color_stream.start()
+                try:
+                    self.color_stream.set_auto_white_balance(True)
+                    self.color_stream.set_auto_exposure(True)
+                    print("已开启自动白平衡和自动曝光")
+                except Exception as e:
+                    print(f"设备不支持自动白平衡/曝光: {str(e)}")
+                print("彩色流启动成功")
+            else:
+                print("设备无彩色传感器，无法启动彩色流")
+                return False
+
+            return True
+        except Exception as e:
+            print(f"相机初始化失败: {str(e)}")
+            self.close_camera()
+            return False
+
+    def get_frames(self):
+        import numpy as np
+        import cv2
+
+        if not self.dev or not self.depth_stream or not self.color_stream:
+            print("错误：相机未打开或流未启动，请先调用open_camera()")
+            return None, None
+
+        try:
+            depth_frame = self.depth_stream.read_frame()
+            depth_data = np.array(
+                depth_frame.get_buffer_as_uint16(),
+                dtype=np.uint16
+            ).reshape(depth_frame.height, depth_frame.width)
+
+            color_frame = self.color_stream.read_frame()
+            color_rgb = np.array(
+                color_frame.get_buffer_as_uint8(),
+                dtype=np.uint8
+            ).reshape(color_frame.height, color_frame.width, 3)
+            color_bgr = cv2.cvtColor(color_rgb, cv2.COLOR_RGB2BGR)
+
+            return color_bgr, depth_data
+        except Exception as e:
+            print(f"帧读取失败: {str(e)}")
+            return None, None
+
+    def capture(self) -> ImageFrame:
+        color_frame, depth_frame = self.get_frames()
+        return ImageFrame(
+            data=color_frame,
+            color_frame=color_frame,
+            depth_frame=depth_frame
+        )
+
+    def save_current_frames(self, current_frame=None):
+        import cv2
+
+        save_path = self.HandEye_calibration_img
+
+        try:
+            if not os.path.exists(save_path):
+                os.makedirs(save_path, exist_ok=True)
+                print(f"自动创建保存目录: {save_path}")
+        except Exception as e:
+            print(f"创建保存目录失败: {str(e)}")
+            return False
+
+        color_img, depth_img = self.get_frames()
+        if color_img is None:
+            print("无有效帧数据，无法保存")
+            return False
+
+        color_save_path = os.path.join(save_path, f"{current_frame}_HandEye.png")
+        try:
+            cv2.imwrite(color_save_path, color_img)
+        except Exception as e:
+            print(f"彩色图像保存失败: {str(e)}")
+            return False
+        print("\n=== 图像保存成功 ===")
+        print(f"彩色图: {color_save_path}")
+        print("===================\n")
+        return True
+
+    def HandEye_calibration_capture(self, calib_idx):
+        if not self.open_camera():
+            print("相机启动失败，无法执行手眼标定")
+            return
+
+        print(f"\n手眼标定开始！")
+        print("每次拍摄前请调整标定板位置（确保棋盘格完整可见）\n")
+
+        if_success = True
+
+        try:
+            current_time = calib_idx
+            print(f"【第 {current_time}次拍摄】")
+            input("请调整标定板后按 Enter 键拍摄...")
+
+            save_success = self.save_current_frames(current_time)
+            if not save_success:
+                print(f"第 {current_time} 次拍摄保存失败，将重新尝试")
+                input("请确认标定板位置后按 Enter 键重新拍摄...")
+                self.save_current_frames()
+
+            print("\n手眼标定完成！图像已保存到:")
+            print(f"{self.HandEye_calibration_img}")
+        except KeyboardInterrupt:
+            print("\n用户中断标定流程")
+        finally:
+            self.close_camera()
+
+    def close_camera(self):
+        from openni import openni2
+
+        print("\n正在关闭相机资源...")
+        try:
+            if self.depth_stream and self.depth_stream.is_valid():
+                self.depth_stream.stop()
+                self.depth_stream.destroy()
+                print("深度流已关闭")
+            if self.color_stream and self.color_stream.is_valid():
+                self.color_stream.stop()
+                self.color_stream.destroy()
+                print("彩色流已关闭")
+            if self.dev and self.dev.is_valid():
+                self.dev.close()
+                print("相机设备已关闭")
+            openni2.unload()
+            print("OpenNI SDK已卸载")
+        except Exception as e:
+            print(f"关闭相机资源时出错: {str(e)}")
+
+    def going_camera_calibration(self, chessboard_size=(9, 6), square_size=0.025):
+        import numpy as np
+        import cv2
+
+        image_dir = self.HandEye_calibration_img
+        objp = np.zeros((chessboard_size[0] * chessboard_size[1], 3), np.float32)
+        objp[:, :2] = np.mgrid[0:chessboard_size[0], 0:chessboard_size[1]].T.reshape(-1, 2)
+        objp *= square_size
+        success_calibration_count = []
+
+        objpoints = []
+        imgpoints = []
+
+        print(f"正在扫描图像目录: {image_dir}")
+        images = glob.glob(f"{image_dir}/*.jpg")
+
+        if not images:
+            raise ValueError("未找到标定图像，请检查路径是否正确")
+
+        success_count = 0
+
+        for img_idx, img_path in enumerate(images, start=1):
+            print(f"\n处理第{img_idx}张图片: {img_path}")
+
+            img = cv2.imread(img_path)
+            if img is None:
+                error_msg = f"第{img_idx}张图片读取失败"
+                print(f" {error_msg}")
+                continue
+
+            if img.size == 0:
+                error_msg = f"第{img_idx}张图片为空或损坏"
+                print(f" {error_msg}")
+                continue
+
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            ret, corners = cv2.findChessboardCorners(gray, chessboard_size, None)
+
+            if ret:
+                objpoints.append(objp)
+                corners2 = cv2.cornerSubPix(
+                    gray, corners, (11, 11), (-1, -1),
+                    criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+                )
+                imgpoints.append(corners2)
+                success_calibration_count.append(img_idx)
+                print(f"第{img_idx}张图片处理成功")
+
+                cv2.drawChessboardCorners(img, chessboard_size, corners2, ret)
+                cv2.imshow("Calibration", img)
+                cv2.waitKey(300)
+            else:
+                self.fail_data.append(img_idx)
+                print(f"第{img_idx}张图片角点检测失败")
+
+        cv2.destroyAllWindows()
+
+        if not objpoints or not imgpoints:
+            raise RuntimeError("没有有效的角点数据，无法进行标定")
+
+        ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
+            objpoints, imgpoints, gray.shape[::-1], None, None
+        )
+
+        if not ret:
+            raise RuntimeError("标定失败，请检查图像质量或数量")
+
+        self.intrinsic_matrix = mtx
+        self.dist_coeffs = dist
+
+        return objpoints, imgpoints, success_calibration_count
+
+    def get_depth_value(self, y, x):
+        color_cframe, depth_cframe = self.get_frames()
+
+        if y > 480 or x > 640 or x < 0 or y < 0:
+            print("超出深度图像范围")
+        else:
+            return depth_cframe[y, x]
+
+    def get_obj_in_camera(self, y, x):
+        import numpy as np
+
+        inverse_intrinsic_matrix = np.linalg.inv(self.intrinsic_matrix)
+
+        obj_img_poisition = np.array([[y],
+                                      [x],
+                                      [1]])
+
+        depth_value = self.get_depth_value(y, x)
+
+        if depth_value == 0:
+            print("检测目标的深度值为0！请移动物体！")
+
+        while depth_value == 0:
+            depth_value = self.get_depth_value(y, x)
+
+        return np.dot(inverse_intrinsic_matrix, obj_img_poisition) * depth_value
+
+================================================================================
+文件: src/qiming/vision/detection.py
+路径: ./src/qiming/vision/detection.py
+--------------------------------------------------------------------------------
+from __future__ import annotations
+
+from ultralytics import YOLO
+import cv2
+import numpy as np
+
+from src.qiming.models import DetectionResult, DetectedObject, ImageFrame
+
+
+class YoloDetector:
+    def __init__(self, model_path: str = "yolov8n.pt"):
+        self.yolo_model = YOLO(model_path)
+
+    def detect_by_class(self, yolo_class: str, frame) -> DetectionResult:
+        if frame is None:
+            return DetectionResult(
+                success=False,
+                detected=False,
+                message="输入帧无效"
+            )
+
+        class_idx = None
+        for idx, name in self.yolo_model.names.items():
+            if name == yolo_class:
+                class_idx = idx
+                break
+        if class_idx is None:
+            return DetectionResult(
+                success=False,
+                detected=False,
+                message=f"YOLO不支持该类别：{yolo_class}"
+            )
+
+        results = self.yolo_model(frame, classes=[class_idx], conf=0.5)
+
+        detected_objects = []
+        if results[0].boxes is not None:
+            for box in results[0].boxes:
+                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                confidence = box.conf[0].item()
+                detected_objects.append(DetectedObject(
+                    class_name=yolo_class,
+                    coordinates=(x1, y1, x2, y2),
+                    confidence=confidence,
+                    center=((x1 + x2) / 2, (y1 + y2) / 2)
+                ))
+
+        return DetectionResult(
+            success=True,
+            detected=len(detected_objects) > 0,
+            objects=detected_objects
+        )
+
+    def detect(self, image_frame: ImageFrame, target_class: str = "cup") -> DetectionResult:
+        frame = image_frame.color_frame if image_frame.color_frame is not None else image_frame.data
+        return self.detect_by_class(target_class, frame)
+
+================================================================================
+文件: src/qiming/vision/__init__.py
+路径: ./src/qiming/vision/__init__.py
+--------------------------------------------------------------------------------
+"""视觉处理模块。"""
+
+from .camera import Camera
+from .depth_camera import DepthCamera
+from .coordinate import CoordinateConverter
+from .detection import YoloDetector
+from .calibration import HandEyeCalibrator
+
+================================================================================
+文件: src/qiming/vision/coordinate.py
+路径: ./src/qiming/vision/coordinate.py
+--------------------------------------------------------------------------------
+from __future__ import annotations
+
+import numpy as np
+from typing import List
+
+from src.qiming.models import ArmAction, MllmDecision, Pose
+from src.qiming.vision.depth_camera import DepthCamera
+from src.qiming.arm_control.mycobot_driver import MyCobotDriver
+
+
+class CoordinateConverter:
+    def __init__(self, depth_camera: DepthCamera, arm_driver: MyCobotDriver):
+        self.depth_camera = depth_camera
+        self.arm_driver = arm_driver
+
+    def pixel_to_robot_coords(self, cx, cy):
+        color_img, depth_img = self.depth_camera.get_frames()
+        if depth_img is None:
+            raise RuntimeError("深度图未获取到，请先打开相机")
+
+        depth = depth_img[int(cy), int(cx)]
+
+        K = self.depth_camera.intrinsic_matrix
+        if K is None:
+            raise RuntimeError("未找到相机内参，请先完成标定！")
+
+        fx, fy = K[0, 0], K[1, 1]
+        cx_k, cy_k = K[0, 2], K[1, 2]
+
+        Xc = (cx - cx_k) * depth / fx
+        Yc = (cy - cy_k) * depth / fy
+        Zc = depth
+        P_cam = np.array([Xc, Yc, Zc, 1]).reshape(4, 1)
+
+        T_cam2end = self.depth_camera.T_cam2end
+        if T_cam2end is None or len(T_cam2end) == 0:
+            raise RuntimeError("未找到手眼标定矩阵，请先进行手眼标定！")
+
+        P_end = T_cam2end @ P_cam
+        Xe, Ye, Ze = P_end[:3, 0]
+
+        R_end2base, t_end2base = self.arm_driver.get_end2base_matrix()
+        T_end2base = np.eye(4)
+        T_end2base[:3, :3] = R_end2base
+        T_end2base[:3, 3] = t_end2base
+
+        P_base = T_end2base @ np.array([Xe, Ye, Ze, 1]).reshape(4, 1)
+        Xb, Yb, Zb = P_base[:3, 0]
+
+        Rx, Ry, Rz = 0, 180, 90
+        coords = [float(Xb), float(Yb), float(Zb), Rx, Ry, Rz]
+
+        target_coords = self.clamp_coords(coords)
+
+        print(f"【像素→机械臂坐标系】目标点: {target_coords}")
+        return target_coords
+
+    def clamp_coords(self, coords):
+        x, y, z, rx, ry, rz = coords
+        x = float(np.clip(x, -350.0, 350.0))
+        y = float(np.clip(y, -350.0, 350.0))
+        z = float(np.clip(z, -41.0, 523.9))
+        rx = float(np.clip(rx, -180.0, 180.0))
+        ry = float(np.clip(ry, -180.0, 180.0))
+        rz = float(np.clip(rz, -180.0, 180.0))
+        return [x, y, z, rx, ry, rz]
+
+    def to_arm_action(self, decision: MllmDecision, handover_coords: List[float]) -> ArmAction:
+        if decision.image_position is not None:
+            cx, cy = decision.image_position
+            pick_pose = tuple(self.pixel_to_robot_coords(cx, cy))  # type: ignore[assignment]
+        else:
+            pick_pose = (120.0, -120.0, 100.0, 0.0, 180.0, 90.0)
+
+        place_pose = tuple(handover_coords)  # type: ignore[assignment]
+        return ArmAction(
+            target_name=decision.target_name,
+            pick_pose=pick_pose,
+            place_pose=place_pose,
+            reply=decision.reply,
+        )
+
+================================================================================
+文件: src/qiming/vision/camera.py
+路径: ./src/qiming/vision/camera.py
+--------------------------------------------------------------------------------
+"""功能：摄像头拍照入口，当前返回空图像，后续替换为真实摄像头采集。"""
+
+from __future__ import annotations
+
+from src.qiming.models import ImageFrame
+
+
+class Camera:
+    """摄像头采集占位。"""
+
+    def capture(self) -> ImageFrame:
+        return ImageFrame()
+
+================================================================================
+文件: src/qiming/vision/calibration.py
+路径: ./src/qiming/vision/calibration.py
+--------------------------------------------------------------------------------
+from __future__ import annotations
+
+import cv2
+import numpy as np
+
+from src.qiming.vision.depth_camera import DepthCamera
+from src.qiming.arm_control.mycobot_driver import MyCobotDriver
+
+
+class HandEyeCalibrator:
+    def __init__(self, depth_camera: DepthCamera, arm_driver: MyCobotDriver):
+        self.depth_camera = depth_camera
+        self.arm_driver = arm_driver
+        self.camera_calibration_times = 20
+        self.success_calibration_count = []
+        self.T_cam2end = []
+        self.CHESSBOARD_SIZE = (9, 6)
+        self.SQUARE_SIZE = 0.025
+        self.calibration_armgrasper_result = []
+        self.r_end2base = []
+        self.t_end2base = []
+
+    def going_calibration_capture(self):
+        print(f"手眼标定开始！一共要进行{self.camera_calibration_times}次手眼标定")
+        for idx in range(self.camera_calibration_times):
+            self.depth_camera.HandEye_calibration_capture(idx)
+            rotation_matrix, translation_matrix = self.arm_driver.get_end2base_matrix()
+            self.calibration_armgrasper_result.append(
+                {
+                    'idx': idx,
+                    'rotation_matrix': rotation_matrix,
+                    'translation_matrix': translation_matrix,
+                }
+            )
+        print("手眼标定完成！")
+
+    def going_calibration_calculation(self):
+        (self.depth_camera.calibration_objpoints,
+         self.depth_camera.calibration_imgpoints,
+         self.success_calibration_count) = self.depth_camera.going_camera_calibration(
+            self.CHESSBOARD_SIZE, self.SQUARE_SIZE
+        )
+
+        for i, (obj_pts, img_pts) in enumerate(zip(
+                self.depth_camera.calibration_objpoints,
+                self.depth_camera.calibration_imgpoints
+        )):
+            retval, rvec, tvec = cv2.solvePnP(
+                obj_pts, img_pts,
+                self.depth_camera.intrinsic_matrix,
+                self.depth_camera.dist_coeffs,
+            )
+
+            if retval:
+                self.depth_camera.all_rvec.append(rvec)
+                self.depth_camera.all_tvec.append(tvec)
+            else:
+                print(f"存在第{i}组数据导致solvePnP函数无法产生正确值！")
+
+        for arm_data in self.calibration_armgrasper_result:
+            flag = True
+            for idx in self.depth_camera.fail_data:
+                if idx == arm_data['idx']:
+                    flag = False
+
+            if flag:
+                self.r_end2base.append(arm_data['rotation_matrix'])
+                self.t_end2base.append(arm_data['translation_matrix'])
+
+        r_cam2end, t_cam2end = cv2.calibrateHandEye(
+            self.r_end2base,
+            self.t_end2base,
+            self.depth_camera.all_rvec,
+            self.depth_camera.all_tvec,
+        )
+
+        zero_vector = np.array([0, 0, 0])
+
+        self.T_cam2end = np.block([
+            [r_cam2end, t_cam2end],
+            [zero_vector, 1],
+        ])
+
+        self.depth_camera.T_cam2end = self.T_cam2end
+        print("手眼标定矩阵计算完成！")
+        print(f"T_cam2end:\n{self.T_cam2end}")
+
+    def run_full_calibration(self):
+        self.going_calibration_capture()
+        self.going_calibration_calculation()
+        return self.T_cam2end
+
+================================================================================
+文件: src/qiming/mllm/recognizer.py
+路径: ./src/qiming/mllm/recognizer.py
+--------------------------------------------------------------------------------
+"""MLLM 识别与决策智能体入口，负责根据用户文本和图像判断目标物体与动作意图。"""
+
+from __future__ import annotations
+
+from typing import Optional
+
+from src.qiming.models import ImageFrame, MllmDecision
+
+
+class MllmRecognizer:
+    """MLLM 调用占位，当前仅保留接口形状。"""
+
+    def __init__(self, llm_cfg: dict) -> None:
+        self.llm_cfg = llm_cfg
+
+    def recognize(self, user_text: str, image: ImageFrame) -> Optional[MllmDecision]:
+        _ = image
+        if not user_text:
+            return None
+
+        return MllmDecision(
+            target_name="水杯",
+            image_position=None,
+            intent="抓取并递给用户",
+            reply="已识别到水杯，正在执行递送动作。",
+        )
+
+================================================================================
+文件: src/qiming/mllm/client.py
+路径: ./src/qiming/mllm/client.py
+--------------------------------------------------------------------------------
+"""MLLM API 客户端占位文件。"""
+
+from __future__ import annotations
+
+from src.qiming.models import ImageFrame
+
+
+class MllmClient:
+    """多模态大模型请求接口占位。"""
+
+    def ask(self, user_text: str, image: ImageFrame) -> dict:
+        _ = (user_text, image)
+        raise NotImplementedError("后续在这里接入真实 MLLM API。")
+
+================================================================================
+文件: src/qiming/mllm/__init__.py
+路径: ./src/qiming/mllm/__init__.py
+--------------------------------------------------------------------------------
+"""MLLM 识别与动作决策模块。"""
+
+================================================================================
+文件: src/qiming/feedback/tts.py
+路径: ./src/qiming/feedback/tts.py
+--------------------------------------------------------------------------------
+"""
+TTS 语音反馈占位文件。
+"""
+from __future__ import annotations
+
+
+class TtsFeedback:
+    """语音播报接口占位。"""
+
+    def say(self, text: str) -> None:
+        print(f"[语音播报] {text}")
+
+================================================================================
+文件: src/qiming/utils/logging.py
+路径: ./src/qiming/utils/logging.py
+--------------------------------------------------------------------------------
+"""日志配置。"""
+
+from __future__ import annotations
+
+import logging
+
+
+def configure_logging(level: str = "INFO") -> None:
+    logging.basicConfig(
+        level=getattr(logging, level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+================================================================================
+文件: src/qiming/utils/__init__.py
+路径: ./src/qiming/utils/__init__.py
+--------------------------------------------------------------------------------
+"""通用工具模块。"""
+
+================================================================================
+文件: src/qiming/utils/config.py
+路径: ./src/qiming/utils/config.py
+--------------------------------------------------------------------------------
+"""配置加载工具。"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+
+def load_yaml(path: str | Path) -> dict[str, Any]:
+    import yaml
+
+    with Path(path).open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data or {}
+
+================================================================================
+文件: src/api/app.py
+路径: ./src/api/app.py
+--------------------------------------------------------------------------------
+
+
+================================================================================
+导出结束
+================================================================================
