@@ -225,3 +225,63 @@ class MyCobotDriver:
         ry = float(np.clip(ry, -180.0, 180.0))
         rz = float(np.clip(rz, -180.0, 180.0))
         return [x, y, z, rx, ry, rz]
+
+    def get_end2base_transform_matrix(self, use_actual_robot=True) -> np.ndarray:
+        """
+        获取末端到基坐标系的4x4齐次变换矩阵 T_EB
+        
+        参数:
+            use_actual_robot: 是否使用真实机械臂
+            
+        返回:
+            4x4 齐次变换矩阵
+        """
+        rotation_matrix, translation_vector = self.get_end2base_matrix(use_actual_robot)
+        T = np.eye(4)
+        T[:3, :3] = rotation_matrix
+        T[:3, 3] = translation_vector.flatten()
+        return T
+
+    def compute_relative_transform(self, T1: np.ndarray, T2: np.ndarray) -> np.ndarray:
+        """
+        计算两个位姿的相对变换: A = T2 * inv(T1)
+        
+        Eye-to-Hand标定中的A矩阵计算
+        
+        参数:
+            T1: 第一个位姿的4x4变换矩阵
+            T2: 第二个位姿的4x4变换矩阵
+            
+        返回:
+            4x4 A矩阵
+        """
+        T1_inv = np.linalg.inv(T1)
+        A = T2 @ T1_inv
+        return A
+
+    def transform_base_to_end(self, point_in_base: np.ndarray, T_BC: np.ndarray) -> np.ndarray:
+        """
+        基坐标系坐标转换到相机坐标系 (Eye-to-Hand模式)
+        
+        参数:
+            point_in_base: 4x1 齐次坐标 [X, Y, Z, 1]
+            T_BC: 相机在基坐标系下的外参 (4x4)
+            
+        返回:
+            相机坐标系下的4x1齐次坐标
+        """
+        return T_BC @ point_in_base
+
+    def transform_camera_to_base(self, point_in_camera: np.ndarray, T_BC: np.ndarray) -> np.ndarray:
+        """
+        相机坐标系坐标转换到基坐标系 (Eye-to-Hand模式)
+        
+        参数:
+            point_in_camera: 4x1 齐次坐标 [X, Y, Z, 1]
+            T_BC: 相机在基坐标系下的外参 (4x4)
+            
+        返回:
+            基坐标系下的4x1齐次坐标
+        """
+        T_BC_inv = np.linalg.inv(T_BC)
+        return T_BC_inv @ point_in_camera

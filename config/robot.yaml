@@ -8,6 +8,17 @@ robot:
   gripper:
     open_value: 80
     close_value: 20
+  hand_eye_calibration:
+    mode: "eye_to_hand"  # "eye_to_hand" 或 "eye_in_hand"
+    calibration_times: 20
+    chessboard_size: [9, 6]
+    square_size: 0.025
+    # TODO: 填入实际的相机内参矩阵 (接入相机后标定获取)
+    intrinsic_matrix: null  # 3x3 矩阵，格式: [[fx, 0, cx], [0, fy, cy], [0, 0, 1]]
+    dist_coeffs: null  # 畸变系数，5x1 或 8x1 向量
+    # TODO: 填入实际的手眼标定外参 (完成标定后填入)
+    T_BC: null  # 4x4 齐次变换矩阵 (Eye-to-Hand: 相机在基坐标系下的外参)
+    T_CE: null  # 4x4 齐次变换矩阵 (Eye-in-Hand: 相机在末端坐标系下的外参)
   camera:
     sdk_path: "D:\\Documnet\\Other material\\3D摄像头客户资料\\驱动程序及SDK开发\\windows\\OpenNI2 SDK\\Windows_V2.3.0\\windows\\SDK\\x64\\Redist"
     calibration_img_dir: "D:\\camera_images"
