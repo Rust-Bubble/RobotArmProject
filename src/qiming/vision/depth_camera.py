@@ -8,9 +8,19 @@ from src.qiming.models import ImageFrame
 
 class DepthCamera:
     def __init__(self, camera_cfg: dict):
-        self.intrinsic_matrix = None
-        self.dist_coeffs = None
-        self.T_cam2end = None
+        # ============ 内参矩阵占位 ============
+        # TODO: 接入真实相机后通过标定获取内参矩阵
+        # 目前为 None，需要手动填入或通过标定流程生成
+        # 内参矩阵格式: 3x3 [[fx, 0, cx], [0, fy, cy], [0, 0, 1]]
+        self.intrinsic_matrix = None  # <-- 内参矩阵占位，待填入
+        self.dist_coeffs = None  # <-- 畸变系数占位，待填入
+        
+        # ============ 外参矩阵占位 ============
+        # TODO: 完成手眼标定后填入
+        # Eye-to-Hand 模式: T_BC (相机在基坐标系下的外参)
+        # Eye-in-Hand 模式: T_CE (相机在末端坐标系下的外参)
+        self.T_cam2end = None  # <-- 外参矩阵占位，待标定后填入
+        
         self.HandEye_calibration_img = camera_cfg.get("calibration_img_dir", r"D:\camera_images")
         self.SDK_Path = camera_cfg.get("sdk_path", r"D:\Documnet\Other material\3D摄像头客户资料\驱动程序及SDK开发\windows\OpenNI2 SDK\Windows_V2.3.0\windows\SDK\x64\Redist")
         self.all_rvec = []
