@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import os
+import base64
 from dataclasses import dataclass
+from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
+
+
+ENV_PATH = Path(__file__).resolve().parents[1] / "mllm" / ".env"
+load_dotenv(ENV_PATH)
 
 
 class AsrError(RuntimeError):
@@ -24,6 +31,7 @@ class AsrUpstreamError(AsrError):
 class AsrSettings:
     api_url: str
     api_key: str | None = None
+    provider: str = "openai"
     model: str = "whisper-1"
     language: str | None = "zh"
     timeout_seconds: float = 60.0
@@ -31,10 +39,21 @@ class AsrSettings:
     @classmethod
     def from_env(cls) -> "AsrSettings":
         api_url = os.getenv("STT_API_URL", "").strip()
-        if not api_url:
-            raise AsrConfigurationError("STT_API_URL 未配置")
+        provider = os.getenv("STT_PROVIDER", "").strip().lower()
+        dashscope_base_url = os.getenv("DASHSCOPE_BASE_URL", "").strip()
+        dashscope_api_key = os.getenv("DASHSCOPE_API_KEY", "").strip()
 
-        api_key = os.getenv("STT_API_KEY", "").strip() or None
+        if not api_url and dashscope_base_url and dashscope_api_key:
+            api_url = f"{dashscope_base_url.rstrip('/')}/chat/completions"
+            provider = "dashscope"
+        if not api_url:
+            raise AsrConfigurationError("STT_API_URL 或 DashScope 配置未提供")
+
+        provider = provider or "openai"
+        default_model = "qwen3-asr-flash" if provider == "dashscope" else "whisper-1"
+        api_key = (
+            os.getenv("STT_API_KEY", "").strip() or dashscope_api_key or None
+        )
         language = os.getenv("STT_LANGUAGE", "zh").strip() or None
         try:
             timeout_seconds = float(os.getenv("STT_TIMEOUT_SECONDS", "60"))
@@ -44,7 +63,8 @@ class AsrSettings:
         return cls(
             api_url=api_url,
             api_key=api_key,
-            model=os.getenv("STT_MODEL", "whisper-1").strip() or "whisper-1",
+            provider=provider,
+            model=os.getenv("STT_MODEL", default_model).strip() or default_model,
             language=language,
             timeout_seconds=timeout_seconds,
         )
@@ -67,18 +87,48 @@ class AsrRecognizer:
         if self.settings.api_key:
             headers["Authorization"] = f"Bearer {self.settings.api_key}"
 
-        form_data = {"model": self.settings.model}
-        if self.settings.language:
-            form_data["language"] = self.settings.language
-
         try:
             with httpx.Client(timeout=self.settings.timeout_seconds) as client:
-                response = client.post(
-                    self.settings.api_url,
-                    headers=headers,
-                    data=form_data,
-                    files={"file": (filename, audio_data, content_type)},
-                )
+                if self.settings.provider == "dashscope":
+                    data_uri = (
+                        f"data:{content_type};base64,"
+                        f"{base64.b64encode(audio_data).decode('ascii')}"
+                    )
+                    payload: dict[str, object] = {
+                        "model": self.settings.model,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "input_audio",
+                                        "input_audio": {"data": data_uri},
+                                    }
+                                ],
+                            }
+                        ],
+                        "stream": False,
+                    }
+                    if self.settings.language:
+                        payload["asr_options"] = {
+                            "language": self.settings.language,
+                            "enable_itn": True,
+                        }
+                    response = client.post(
+                        self.settings.api_url,
+                        headers=headers,
+                        json=payload,
+                    )
+                else:
+                    form_data = {"model": self.settings.model}
+                    if self.settings.language:
+                        form_data["language"] = self.settings.language
+                    response = client.post(
+                        self.settings.api_url,
+                        headers=headers,
+                        data=form_data,
+                        files={"file": (filename, audio_data, content_type)},
+                    )
         except httpx.HTTPError as exc:
             raise AsrUpstreamError(f"STT 服务连接失败: {exc}") from exc
 
@@ -93,7 +143,15 @@ class AsrRecognizer:
         except ValueError as exc:
             raise AsrUpstreamError("STT 服务未返回有效 JSON") from exc
 
-        text = payload.get("text") if isinstance(payload, dict) else None
+        text: object = None
+        if isinstance(payload, dict):
+            if self.settings.provider == "dashscope":
+                try:
+                    text = payload["choices"][0]["message"]["content"]
+                except (KeyError, IndexError, TypeError):
+                    text = None
+            else:
+                text = payload.get("text")
         if not isinstance(text, str) or not text.strip():
             raise AsrUpstreamError("STT 服务返回中缺少转写文本")
         return text.strip()

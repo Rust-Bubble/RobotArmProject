@@ -1,4 +1,4 @@
-"""FastAPI entrypoint for browser recording and speech transcription."""
+"""FastAPI entrypoint for browser speech input and output."""
 
 from __future__ import annotations
 
@@ -8,6 +8,14 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
+from src.qiming.feedback.tts import (
+    TtsConfigurationError,
+    TtsSynthesizer,
+    TtsUpstreamError,
+)
 
 from src.qiming.speech.asr import (
     AsrConfigurationError,
@@ -25,6 +33,11 @@ ALLOWED_AUDIO_TYPES = {
     "audio/x-wav",
 }
 
+
+class SpeechRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=4096)
+
+
 app = FastAPI(title="Qiming Smart Hand API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -39,8 +52,23 @@ app.add_middleware(
 async def health() -> dict[str, object]:
     return {
         "status": "ok",
-        "stt_configured": bool(os.getenv("STT_API_URL", "").strip()),
+        "stt_configured": bool(
+            os.getenv("STT_API_URL", "").strip()
+            or (
+                os.getenv("DASHSCOPE_BASE_URL", "").strip()
+                and os.getenv("DASHSCOPE_API_KEY", "").strip()
+            )
+        ),
         "stt_model": os.getenv("STT_MODEL", "whisper-1"),
+        "tts_configured": bool(
+            os.getenv("TTS_API_URL", "").strip()
+            or (
+                os.getenv("DASHSCOPE_BASE_URL", "").strip()
+                and os.getenv("DASHSCOPE_API_KEY", "").strip()
+            )
+        ),
+        "tts_model": os.getenv("TTS_MODEL", "gpt-4o-mini-tts"),
+        "tts_voice": os.getenv("TTS_VOICE", "alloy"),
     }
 
 
@@ -72,3 +100,26 @@ async def transcribe(file: UploadFile = File(...)) -> dict[str, str]:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return {"text": text}
+
+
+@app.post("/api/tts/speech", response_class=StreamingResponse)
+async def synthesize_speech(payload: SpeechRequest) -> StreamingResponse:
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="播报文本不能为空")
+
+    try:
+        audio = await TtsSynthesizer().open_stream(text)
+    except TtsConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except TtsUpstreamError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return StreamingResponse(
+        audio.iter_bytes(),
+        media_type=audio.content_type,
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
+    )

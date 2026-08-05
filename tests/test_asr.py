@@ -38,6 +38,37 @@ class AsrRecognizerTests(unittest.TestCase):
         with self.assertRaises(AsrUpstreamError):
             self.recognizer.recognize(b"audio")
 
+    @patch("src.qiming.speech.asr.httpx.Client.post")
+    def test_dashscope_sends_base64_audio(self, post: MagicMock) -> None:
+        recognizer = AsrRecognizer(
+            AsrSettings(
+                api_url=(
+                    "https://dashscope.aliyuncs.com/compatible-mode/v1/"
+                    "chat/completions"
+                ),
+                api_key="secret",
+                provider="dashscope",
+                model="qwen3-asr-flash",
+                language="zh",
+            )
+        )
+        post.return_value.is_error = False
+        post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "  帮我拿水杯  "}}]
+        }
+
+        result = recognizer.recognize(
+            b"audio",
+            filename="voice.webm",
+            content_type="audio/webm",
+        )
+
+        self.assertEqual(result, "帮我拿水杯")
+        payload = post.call_args.kwargs["json"]
+        audio = payload["messages"][0]["content"][0]["input_audio"]["data"]
+        self.assertTrue(audio.startswith("data:audio/webm;base64,"))
+        self.assertEqual(payload["asr_options"]["language"], "zh")
+
 
 if __name__ == "__main__":
     unittest.main()

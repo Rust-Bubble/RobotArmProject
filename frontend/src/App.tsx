@@ -13,6 +13,7 @@ import {
   Waves,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { playAudioResponse } from "./streamingAudio";
 
 type SessionState =
   | "idle"
@@ -21,6 +22,9 @@ type SessionState =
   | "complete"
   | "error";
 type ServiceState = "checking" | "ready" | "unconfigured" | "offline";
+type TtsState = "idle" | "loading" | "playing" | "complete" | "error";
+
+const FEEDBACK_TEXT = "语音转写已完成，文本可继续传入 Agent 执行。";
 
 const AUDIO_TYPES = [
   "audio/webm;codecs=opus",
@@ -48,9 +52,21 @@ async function readError(response: Response) {
   }
 }
 
+async function readTtsError(response: Response) {
+  try {
+    const payload = (await response.json()) as { detail?: string };
+    return payload.detail || `语音合成失败（${response.status}）`;
+  } catch {
+    return `语音合成失败（${response.status}）`;
+  }
+}
+
 export default function App() {
   const [state, setState] = useState<SessionState>("idle");
   const [serviceState, setServiceState] = useState<ServiceState>("checking");
+  const [ttsServiceState, setTtsServiceState] =
+    useState<ServiceState>("checking");
+  const [ttsState, setTtsState] = useState<TtsState>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notice, setNotice] = useState("");
@@ -60,6 +76,9 @@ export default function App() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const requestRef = useRef<AbortController | null>(null);
+  const ttsRequestRef = useRef<AbortController | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
 
   const clearTimer = () => {
     if (timerRef.current !== null) window.clearInterval(timerRef.current);
@@ -71,10 +90,25 @@ export default function App() {
     streamRef.current = null;
   };
 
+  const stopSpeech = () => {
+    ttsRequestRef.current?.abort();
+    ttsRequestRef.current = null;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.removeAttribute("src");
+      audioRef.current.load();
+      audioRef.current = null;
+    }
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    audioUrlRef.current = null;
+    setTtsState("idle");
+  };
+
   const resetSession = () => {
     clearTimer();
     requestRef.current?.abort();
     requestRef.current = null;
+    stopSpeech();
     if (recorderRef.current?.state === "recording") {
       recorderRef.current.onstop = null;
       recorderRef.current.stop();
@@ -93,14 +127,19 @@ export default function App() {
     fetch("/api/health", { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error("health check failed");
-        return (await response.json()) as { stt_configured?: boolean };
+        return (await response.json()) as {
+          stt_configured?: boolean;
+          tts_configured?: boolean;
+        };
       })
-      .then((health) =>
-        setServiceState(health.stt_configured ? "ready" : "unconfigured"),
-      )
+      .then((health) => {
+        setServiceState(health.stt_configured ? "ready" : "unconfigured");
+        setTtsServiceState(health.tts_configured ? "ready" : "unconfigured");
+      })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
           setServiceState("offline");
+          setTtsServiceState("offline");
         }
       });
 
@@ -108,6 +147,9 @@ export default function App() {
       controller.abort();
       clearTimer();
       requestRef.current?.abort();
+      ttsRequestRef.current?.abort();
+      audioRef.current?.pause();
+      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
       if (recorderRef.current?.state === "recording") {
         recorderRef.current.onstop = null;
         recorderRef.current.stop();
@@ -115,6 +157,45 @@ export default function App() {
       stopTracks();
     };
   }, []);
+
+  const playSpeech = async (text: string) => {
+    stopSpeech();
+    const controller = new AbortController();
+    const audio = new Audio();
+    audio.preload = "auto";
+    ttsRequestRef.current = controller;
+    audioRef.current = audio;
+    setTtsState("loading");
+
+    const onPlaying = () => setTtsState("playing");
+    const onEnded = () => setTtsState("complete");
+    audio.addEventListener("playing", onPlaying);
+    audio.addEventListener("ended", onEnded);
+
+    try {
+      const response = await fetch("/api/tts/speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(await readTtsError(response));
+
+      const playback = await playAudioResponse(
+        response,
+        audio,
+        controller.signal,
+      );
+      audioUrlRef.current = playback.objectUrl;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setNotice(error instanceof Error ? error.message : "语音合成失败，请重试。");
+      setTtsState("error");
+    } finally {
+      audio.removeEventListener("playing", onPlaying);
+      if (ttsRequestRef.current === controller) ttsRequestRef.current = null;
+    }
+  };
 
   const submitRecording = async (audio: Blob, mimeType: string) => {
     if (!audio.size) {
@@ -143,6 +224,7 @@ export default function App() {
       setTranscript(payload.text.trim());
       setNotice("");
       setState("complete");
+      if (ttsServiceState === "ready") void playSpeech(FEEDBACK_TEXT);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setNotice(error instanceof Error ? error.message : "转写失败，请重试。");
@@ -241,6 +323,13 @@ export default function App() {
     offline: "未连接",
   }[serviceState];
 
+  const ttsServiceCopy = {
+    checking: "检查中",
+    ready: "已就绪",
+    unconfigured: "待配置",
+    offline: "未连接",
+  }[ttsServiceState];
+
   const statusTitle =
     state === "recording"
       ? `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(
@@ -262,7 +351,7 @@ export default function App() {
           <span><strong>启明智手</strong><small>语音智能机械臂</small></span>
         </a>
         <div className="header-actions">
-          <span className={`connection ${serviceState}`}><i />STT {serviceCopy}</span>
+          <span className={`connection ${serviceState}`}><i />STT {serviceCopy} · TTS {ttsServiceCopy}</span>
           <button className="emergency" type="button">
             <CircleStop size={17} />紧急停止
           </button>
@@ -296,7 +385,18 @@ export default function App() {
               {state === "complete" && (
                 <div className="turn agent-turn">
                   <div className="turn-meta"><span className="agent-name"><Bot size={14} />启明</span><small>系统提示</small></div>
-                  <div className="turn-content"><p className="pending-copy">语音转写已完成，文本可继续传入 Agent 执行。</p></div>
+                  <div className="turn-content agent-feedback">
+                    <p className="pending-copy">{FEEDBACK_TEXT}</p>
+                    <button
+                      type="button"
+                      className={`tts-button ${ttsState}`}
+                      onClick={() => void playSpeech(FEEDBACK_TEXT)}
+                      disabled={ttsServiceState !== "ready" || ttsState === "loading"}
+                    >
+                      {ttsState === "loading" ? <LoaderCircle className="spin" size={14} /> : <Volume2 size={14} />}
+                      {ttsState === "loading" ? "正在合成" : ttsState === "playing" ? "正在播放" : "播放语音"}
+                    </button>
+                  </div>
                 </div>
               )}
             </>
@@ -321,7 +421,15 @@ export default function App() {
         {notice && state !== "error" && <p className="permission-notice" role="status">{notice}</p>}
         <footer className="interface-note">
           <span>STT · {serviceCopy}</span><span>Agent · 待接入</span>
-          <span><Volume2 size={12} />TTS · 待接入</span>
+          <button
+            type="button"
+            className={`tts-preview ${ttsState}`}
+            onClick={() => void playSpeech("你好，我是启明智手，语音合成功能已经接入成功。")}
+            disabled={ttsServiceState !== "ready" || ttsState === "loading"}
+          >
+            {ttsState === "loading" ? <LoaderCircle className="spin" size={12} /> : <Volume2 size={12} />}
+            {ttsState === "loading" ? "正在合成" : ttsState === "playing" ? "正在播放" : `试听 TTS · ${ttsServiceCopy}`}
+          </button>
         </footer>
       </section>
 
@@ -348,6 +456,7 @@ export default function App() {
           <section className="console-section devices">
             <div className="section-label"><span>服务状态</span></div>
             <div><span><Cpu size={15} />STT 服务</span><small className={serviceState === "ready" ? "status-ready" : ""}>{serviceCopy}</small></div>
+            <div><span><Volume2 size={15} />TTS 服务</span><small className={ttsServiceState === "ready" ? "status-ready" : ""}>{ttsServiceCopy}</small></div>
             <div><span><Bot size={15} />机械臂</span><small>状态不可用</small></div>
           </section>
         </div>
