@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import cv2
+import numpy as np
 
 from src.qiming.arm_control.controller import ArmController
 from src.qiming.arm_control.mycobot_driver import MyCobotDriver
@@ -17,7 +18,58 @@ from src.qiming.vision.camera import Camera
 from src.qiming.vision.depth_camera import DepthCamera
 from src.qiming.vision.coordinate import CoordinateConverter
 from src.qiming.vision.detection import YoloDetector
-from src.qiming.vision.calibration import HandEyeCalibrator
+from src.qiming.vision.calibration import EyeToHandCalibrator
+
+
+def _setup_calibration_config(depth_camera, converter, calib_cfg):
+    """
+    从配置文件加载标定参数 (内参矩阵、外参矩阵)
+    
+    参数:
+        depth_camera: DepthCamera 实例
+        converter: CoordinateConverter 实例
+        calib_cfg: 标定配置字典
+    """
+    # 加载手眼标定模式
+    calib_mode = calib_cfg.get("mode", "eye_to_hand")
+    converter.set_calibration_mode(calib_mode)
+    
+    # 加载内参矩阵
+    K_data = calib_cfg.get("intrinsic_matrix")
+    dist_data = calib_cfg.get("dist_coeffs")
+    
+    if K_data is not None and dist_data is not None:
+        try:
+            K = np.array(K_data)
+            dist = np.array(dist_data)
+            depth_camera.intrinsic_matrix = K
+            depth_camera.dist_coeffs = dist
+            print("[配置] 内参矩阵已从配置加载")
+        except Exception as e:
+            print(f"[警告] 加载内参矩阵失败: {e}")
+    else:
+        print("[警告] 内参矩阵未配置，请在 config/robot.yaml 中填入或通过标定流程生成")
+    
+    # 加载 Eye-to-Hand 外参矩阵 T_BC
+    T_BC_data = calib_cfg.get("T_BC")
+    if T_BC_data is not None:
+        try:
+            T_BC = np.array(T_BC_data)
+            converter.set_T_BC(T_BC)
+            depth_camera.T_cam2end = T_BC
+            print("[配置] T_BC 矩阵已从配置加载")
+        except Exception as e:
+            print(f"[警告] 加载 T_BC 矩阵失败: {e}")
+    
+    # 加载 Eye-in-Hand 外参矩阵 T_CE
+    T_CE_data = calib_cfg.get("T_CE")
+    if T_CE_data is not None:
+        try:
+            T_CE = np.array(T_CE_data)
+            converter.set_T_CE(T_CE)
+            print("[配置] T_CE 矩阵已从配置加载")
+        except Exception as e:
+            print(f"[警告] 加载 T_CE 矩阵失败: {e}")
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -33,6 +85,7 @@ def main() -> int:
     robot_cfg = load_yaml("config/robot.yaml")["robot"]
     llm_cfg = load_yaml("config/llm.yaml")["llm"]
     camera_cfg = robot_cfg.get("camera", {})
+    calib_cfg = robot_cfg.get("hand_eye_calibration", {})
 
     voice = VoiceIO()
     feedback = TtsFeedback()
@@ -49,10 +102,16 @@ def main() -> int:
     converter = CoordinateConverter(depth_camera, arm_driver)
     arm = ArmController(arm_driver)
 
+    # 加载标定配置 (内参矩阵、外参矩阵)
+    _setup_calibration_config(depth_camera, converter, calib_cfg)
+
     if args.calibrate:
-        print("开始手眼标定流程...")
-        calibrator = HandEyeCalibrator(depth_camera, arm_driver)
-        calibrator.run_full_calibration()
+        print("开始Eye-to-Hand手眼标定流程...")
+        calibrator = EyeToHandCalibrator(depth_camera, arm_driver)
+        calibrator.calibration_times = calib_cfg.get("calibration_times", 20)
+        calibrator.CHESSBOARD_SIZE = tuple(calib_cfg.get("chessboard_size", [9, 6]))
+        calibrator.SQUARE_SIZE = calib_cfg.get("square_size", 0.025)
+        calibrator.run_calibration()
         feedback.say("手眼标定完成。")
         return 0
 
