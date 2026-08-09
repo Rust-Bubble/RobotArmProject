@@ -14,7 +14,7 @@ class Action(BaseModel):
 
 
 class MllmRecognizer:
-    """MLLM 调用占位，当前仅保留接口形状。"""
+    """MLLM 调用占位。"""
 
     def __init__(self) -> None:
         load_dotenv()
@@ -89,7 +89,7 @@ class MllmRecognizer:
 
     def recognize(self,userInfo,imageInfo) :
         """
-        视觉识别信息处理
+        根据图片信息和指令返回物体位置（无法测定深度）
         :param userInfo:用户消息
         :param imageInfo:图片地址，如"C:/Users/under/Pictures/Saved Pictures/样本3.jpg"
         :return:Action类对象
