@@ -26,3 +26,4 @@ data/
 Thumbs.db
 
 .env
+.idea/workspace.xml
