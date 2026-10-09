@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 from typing import List, Optional
 
+from src.qiming.arm_control.pose_presets import DEFAULT_PRESET_NAME, apply_preset
 from src.qiming.models import ArmAction, MllmDecision, Pose
 from src.qiming.vision.depth_camera import DepthCamera
 from src.qiming.arm_control.mycobot_driver import MyCobotDriver
@@ -29,6 +30,14 @@ class CoordinateConverter:
         
         # Eye-in-Hand 模式: 相机在末端坐标系下的外参 (保留兼容)
         self.T_CE: Optional[np.ndarray] = None
+
+        # 末端姿态预设，见 arm_control/pose_presets.py
+        self.grasp_preset = DEFAULT_PRESET_NAME
+
+    def set_grasp_preset(self, name: str):
+        """设置抓取时使用的末端姿态预设。"""
+        self.grasp_preset = name
+        print(f"[配置] 末端姿态预设设置为: {name}")
 
     def set_calibration_mode(self, mode: str):
         """
@@ -171,9 +180,8 @@ class CoordinateConverter:
         Xb, Yb, Zb = P_base[:3]
         print(f"[坐标转换] 基坐标系: X={Xb:.2f}, Y={Yb:.2f}, Z={Zb:.2f}")
 
-        # Step 3: 附加固定俯视姿态
-        Rx, Ry, Rz = 0.0, 180.0, 90.0
-        coords = [float(Xb), float(Yb), float(Zb), Rx, Ry, Rz]
+        # Step 3: 附加末端姿态预设（默认垂直俯视夹取）
+        coords = list(apply_preset([Xb, Yb, Zb], self.grasp_preset, phase="grasp"))
 
         target_coords = self.clamp_coords(coords)
         print(f"[坐标转换] 机械臂目标位姿: {target_coords}")
