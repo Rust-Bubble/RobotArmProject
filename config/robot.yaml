@@ -5,9 +5,27 @@ robot:
   baudrate: 1000000
   default_speed: 35
   handover_coords: [80.0, -220.0, 180.0, 0.0, 0.0, 0.0]
+  # 抓取时使用的末端姿态预设，见 src/qiming/arm_control/pose_presets.py
+  grasp_preset: "top_down"
   gripper:
     open_value: 80
     close_value: 20
+  # 逆运动学参数（改进 DH, 单位: deg / mm），留空则使用 kinematics.py 中的 myCobot 320 默认值
+  kinematics:
+    dh_params:
+      - [0, 0, 173.9, 0]
+      - [90, 0, 0, -90]
+      - [0, -135, 0, 0]
+      - [0, -120, 95, -90]
+      - [90, 0, 87.78, 0]
+      - [-90, 0, 65.5, 0]
+    joint_limits:
+      - [-168, 168]
+      - [-135, 135]
+      - [-145, 145]
+      - [-148, 148]
+      - [-168, 168]
+      - [-180, 180]
   hand_eye_calibration:
     mode: "eye_to_hand"  # "eye_to_hand" 或 "eye_in_hand"
     calibration_times: 20

@@ -105,6 +105,9 @@ def main() -> int:
     # 加载标定配置 (内参矩阵、外参矩阵)
     _setup_calibration_config(depth_camera, converter, calib_cfg)
 
+    # 抓取末端姿态预设
+    converter.set_grasp_preset(robot_cfg.get("grasp_preset", "top_down"))
+
     if args.calibrate:
         print("开始Eye-to-Hand手眼标定流程...")
         calibrator = EyeToHandCalibrator(depth_camera, arm_driver)
