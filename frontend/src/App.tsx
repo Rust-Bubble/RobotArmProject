@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AudioLines,
   Bot,
-  ChevronLeft,
   CircleStop,
   Cpu,
   LogOut,
@@ -66,7 +65,6 @@ export default function App() {
   const [wsConnected, setWsConnected] = useState(false);
   const [task, setTask] = useState<TaskInfo>(EMPTY_TASK);
   const [events, setEvents] = useState<EventRow[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const clientRef = useRef<ChatClient | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
@@ -343,209 +341,195 @@ export default function App() {
         </div>
       </header>
 
-      <section className="conversation-layout">
-        <div className="conversation-header">
-          <div>
-            <span>CONVERSATION</span>
-            <h1>与启明对话</h1>
-          </div>
-          <button type="button" onClick={resetSession}>
-            <RefreshCw size={15} />
-            新建会话
-          </button>
-        </div>
-
-        <div className="conversation-stream" aria-live="polite" ref={streamRef}>
-          {messages.length === 0 && !waiting && (
-            <div className="empty-conversation">
-              <span>
-                <AudioLines size={27} />
-              </span>
-              <h2>从一句话开始</h2>
-              <p>
-                试试输入"帮我拿桌上的水杯"（动作指令）、"你是谁"（闲聊）或"查询状态"（系统指令），
-                Orchestrator 会自动识别意图并分发给对应的 Agent。
-              </p>
+      <div className="workspace">
+        <section className="conversation-layout">
+          <div className="conversation-header">
+            <div>
+              <span>CONVERSATION</span>
+              <h1>与启明对话</h1>
             </div>
-          )}
+            <button type="button" onClick={resetSession}>
+              <RefreshCw size={15} />
+              新建会话
+            </button>
+          </div>
 
-          {messages.map((msg) => (
-            <div key={msg.id} className={`turn ${msg.role === "user" ? "user-turn" : "agent-turn"}`}>
-              <div className="turn-meta">
-                {msg.role === "user" ? (
-                  <span>你</span>
-                ) : (
+          <div className="conversation-stream" aria-live="polite" ref={streamRef}>
+            {messages.length === 0 && !waiting && (
+              <div className="empty-conversation">
+                <span>
+                  <AudioLines size={27} />
+                </span>
+                <h2>从一句话开始</h2>
+                <p>
+                  试试输入"帮我拿桌上的水杯"（动作指令）、"你是谁"（闲聊）或"查询状态"（系统指令），
+                  Orchestrator 会自动识别意图并分发给对应的 Agent。
+                </p>
+              </div>
+            )}
+
+            {messages.map((msg) => (
+              <div key={msg.id} className={`turn ${msg.role === "user" ? "user-turn" : "agent-turn"}`}>
+                <div className="turn-meta">
+                  {msg.role === "user" ? (
+                    <span>你</span>
+                  ) : (
+                    <span className="agent-name">
+                      <Bot size={14} />
+                      启明
+                    </span>
+                  )}
+                  <small>{msg.meta ?? ""}</small>
+                </div>
+                <div className="turn-content">
+                  <p>{msg.text}</p>
+                </div>
+              </div>
+            ))}
+
+            {waiting && (
+              <div className="turn agent-turn">
+                <div className="turn-meta">
                   <span className="agent-name">
                     <Bot size={14} />
                     启明
                   </span>
-                )}
-                <small>{msg.meta ?? ""}</small>
-              </div>
-              <div className="turn-content">
-                <p>{msg.text}</p>
-              </div>
-            </div>
-          ))}
-
-          {waiting && (
-            <div className="turn agent-turn">
-              <div className="turn-meta">
-                <span className="agent-name">
-                  <Bot size={14} />
-                  启明
-                </span>
-                <small>思考中</small>
-              </div>
-              <div className="turn-content">
-                <div className="listening-line">
-                  <span className="listening-dot" />
-                  Orchestrator 正在调度 Agent…
+                  <small>思考中</small>
+                </div>
+                <div className="turn-content">
+                  <div className="listening-line">
+                    <span className="listening-dot" />
+                    Orchestrator 正在调度 Agent…
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        <div className="text-composer">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") sendText();
-            }}
-            placeholder={wsConnected ? "输入消息，回车发送…" : "后端未连接，无法发送"}
-            disabled={!wsConnected}
-          />
-          <button
-            type="button"
-            onClick={sendText}
-            disabled={!wsConnected || waiting || !input.trim()}
-            aria-label="发送"
-          >
-            <Send size={16} />
-          </button>
-          <button type="button" className="mic-button small" onClick={onMicClick} aria-label="语音输入">
-            <Mic size={18} />
-          </button>
-        </div>
-
-        {notice && (
-          <p className="permission-notice" role="status">
-            {notice}
-          </p>
-        )}
-
-        <footer className="interface-note">
-          <span>STT · 未接入</span>
-          <span>{wsConnected ? "Agent · 已连接" : "Agent · 未连接"}</span>
-          <span>
-            <Volume2 size={12} />
-            TTS · 未接入
-          </span>
-        </footer>
-      </section>
-
-      <aside
-        className={`control-drawer ${drawerOpen ? "open" : ""}`}
-        onMouseEnter={() => setDrawerOpen(true)}
-        onMouseLeave={() => setDrawerOpen(false)}
-      >
-        <button
-          type="button"
-          className="drawer-handle"
-          onClick={() => setDrawerOpen((value) => !value)}
-          onFocus={() => setDrawerOpen(true)}
-          aria-expanded={drawerOpen}
-          aria-controls="agent-console"
-        >
-          <ChevronLeft size={17} />
-          <span>控制台</span>
-        </button>
-
-        <div className="drawer-content" id="agent-console">
-          <div className="drawer-title">
-            <span>AGENT CONSOLE</span>
-            <h2>任务控制台</h2>
+            )}
           </div>
 
-          <section className="console-section">
-            <div className="section-label">
-              <span>当前任务</span>
-              <small>{waiting ? "执行中" : messages.length > 0 ? "空闲" : "暂无"}</small>
-            </div>
-            <dl className="task-fields">
-              <div>
-                <dt>意图</dt>
-                <dd>{task.intent}</dd>
-              </div>
-              <div>
-                <dt>目标</dt>
-                <dd>{task.target}</dd>
-              </div>
-              <div>
-                <dt>动作参数</dt>
-                <dd>{task.params}</dd>
-              </div>
-            </dl>
-            <p className="empty-task">
-              {messages.length === 0
-                ? "收到有效的 Agent 输出后，这里将展示结构化任务。"
-                : waiting
-                  ? "Orchestrator 正在识别意图并分发任务。"
-                  : "上一轮任务已结束，等待新的指令。"}
-            </p>
-          </section>
+          <div className="text-composer">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") sendText();
+              }}
+              placeholder={wsConnected ? "输入消息，回车发送…" : "后端未连接，无法发送"}
+              disabled={!wsConnected}
+            />
+            <button
+              type="button"
+              onClick={sendText}
+              disabled={!wsConnected || waiting || !input.trim()}
+              aria-label="发送"
+            >
+              <Send size={16} />
+            </button>
+            <button type="button" className="mic-button small" onClick={onMicClick} aria-label="语音输入">
+              <Mic size={18} />
+            </button>
+          </div>
 
-          <section className="console-section">
-            <div className="section-label">
-              <span>执行事件</span>
-              <small>实时</small>
+          {notice && (
+            <p className="permission-notice" role="status">
+              {notice}
+            </p>
+          )}
+
+          <footer className="interface-note">
+            <span>STT · 未接入</span>
+            <span>{wsConnected ? "Agent · 已连接" : "Agent · 未连接"}</span>
+            <span>
+              <Volume2 size={12} />
+              TTS · 未接入
+            </span>
+          </footer>
+        </section>
+
+        <aside className="control-panel" aria-label="任务控制台">
+          <div className="panel-content" id="agent-console">
+            <div className="panel-title">
+              <span>AGENT CONSOLE</span>
+              <h2>任务控制台</h2>
             </div>
-            <div className="event-stream">
-              {events.length === 0 ? (
+
+            <section className="console-section">
+              <div className="section-label">
+                <span>当前任务</span>
+                <small>{waiting ? "执行中" : messages.length > 0 ? "空闲" : "暂无"}</small>
+              </div>
+              <dl className="task-fields">
                 <div>
-                  <i />
-                  <span>
-                    <strong>等待用户输入</strong>
-                    <small>当前状态</small>
-                  </span>
+                  <dt>意图</dt>
+                  <dd>{task.intent}</dd>
                 </div>
-              ) : (
-                events.map((ev, idx) => (
-                  <div key={idx} className={ev.cls}>
+                <div>
+                  <dt>目标</dt>
+                  <dd>{task.target}</dd>
+                </div>
+                <div>
+                  <dt>动作参数</dt>
+                  <dd>{task.params}</dd>
+                </div>
+              </dl>
+              <p className="empty-task">
+                {messages.length === 0
+                  ? "收到有效的 Agent 输出后，这里将展示结构化任务。"
+                  : waiting
+                    ? "Orchestrator 正在识别意图并分发任务。"
+                    : "上一轮任务已结束，等待新的指令。"}
+              </p>
+            </section>
+
+            <section className="console-section">
+              <div className="section-label">
+                <span>执行事件</span>
+                <small>实时</small>
+              </div>
+              <div className="event-stream">
+                {events.length === 0 ? (
+                  <div>
                     <i />
                     <span>
-                      <strong>{ev.label}</strong>
-                      <small>{ev.sub}</small>
+                      <strong>等待用户输入</strong>
+                      <small>当前状态</small>
                     </span>
                   </div>
-                ))
-              )}
-            </div>
-          </section>
+                ) : (
+                  events.map((ev, idx) => (
+                    <div key={idx} className={ev.cls}>
+                      <i />
+                      <span>
+                        <strong>{ev.label}</strong>
+                        <small>{ev.sub}</small>
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
 
-          <section className="console-section devices">
-            <div className="section-label">
-              <span>服务状态</span>
-            </div>
-            <div>
-              <span>
-                <Cpu size={15} />
-                后端服务
-              </span>
-              <small>{wsConnected ? "WebSocket 已连接" : "未连接"}</small>
-            </div>
-            <div>
-              <span>
-                <Bot size={15} />
-                Orchestrator
-              </span>
-              <small>{wsConnected ? "就绪" : "不可用"}</small>
-            </div>
-          </section>
-        </div>
-      </aside>
+            <section className="console-section devices">
+              <div className="section-label">
+                <span>服务状态</span>
+              </div>
+              <div>
+                <span>
+                  <Cpu size={15} />
+                  后端服务
+                </span>
+                <small>{wsConnected ? "WebSocket 已连接" : "未连接"}</small>
+              </div>
+              <div>
+                <span>
+                  <Bot size={15} />
+                  Orchestrator
+                </span>
+                <small>{wsConnected ? "就绪" : "不可用"}</small>
+              </div>
+            </section>
+          </div>
+        </aside>
+      </div>
     </main>
   );
 }
