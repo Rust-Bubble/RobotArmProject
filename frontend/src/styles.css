@@ -780,3 +780,11 @@ a:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.tts-button { min-width: 92px; height: 32px; margin-top: 8px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 18px; font: inherit; font-size: 10px; cursor: pointer; }
+.tts-button:hover:not(:disabled) { color: var(--orange); border-color: var(--orange); }
+.tts-button:disabled { color: #aaa; cursor: wait; }
+.voice-input-control { position: relative; display: inline-flex; }
+.mic-button.small.recording { background: #a14629; }
+.voice-input-error { width: max-content; max-width: 260px; position: absolute; right: 0; bottom: calc(100% + 8px); padding: 8px 10px; color: #a14629; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; font-size: 10px; box-shadow: 0 4px 14px rgba(32, 33, 30, 0.1); }

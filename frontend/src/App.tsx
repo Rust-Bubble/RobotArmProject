@@ -23,6 +23,7 @@ import {
   login,
   register,
 } from "./api/auth";
+import { SpeakButton, VoiceInput } from "./SpeechControls";
 
 interface Message {
   id: number;
@@ -213,12 +214,12 @@ export default function App() {
   };
 
   // ---------- 发送文本 ----------
-  const sendText = () => {
-    const content = input.trim();
+  const sendText = (rawText: string = input) => {
+    const content = rawText.trim();
     if (!content || waiting || !clientRef.current?.ready) return;
     setInput("");
     setNotice("");
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", text: content, meta: "文本输入" }]);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", text: content, meta: rawText === input ? "文本输入" : "语音输入" }]);
     setEvents([]);
     setWaiting(true);
     clientRef.current.sendText(content);
@@ -230,11 +231,6 @@ export default function App() {
     setTask(EMPTY_TASK);
     setWaiting(false);
     setNotice("");
-  };
-
-  // ---------- 麦克风（STT 未接入，保留按钮占位） ----------
-  const onMicClick = () => {
-    setNotice("语音识别（STT）尚未接入，请先用文本输入与 Agent 对话。");
   };
 
   // ================= 登录视图 =================
@@ -384,6 +380,7 @@ export default function App() {
               </div>
               <div className="turn-content">
                 <p>{msg.text}</p>
+                {msg.role === "agent" && <SpeakButton text={msg.text} />}
               </div>
             </div>
           ))}
@@ -425,9 +422,7 @@ export default function App() {
           >
             <Send size={16} />
           </button>
-          <button type="button" className="mic-button small" onClick={onMicClick} aria-label="语音输入">
-            <Mic size={18} />
-          </button>
+          <VoiceInput disabled={!wsConnected || waiting} onTranscript={(text) => sendText(text)} />
         </div>
 
         {notice && (
@@ -437,11 +432,11 @@ export default function App() {
         )}
 
         <footer className="interface-note">
-          <span>STT · 未接入</span>
+          <span>STT · 已接入</span>
           <span>{wsConnected ? "Agent · 已连接" : "Agent · 未连接"}</span>
           <span>
             <Volume2 size={12} />
-            TTS · 未接入
+            TTS · 点击消息播报
           </span>
         </footer>
       </section>
