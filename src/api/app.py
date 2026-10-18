@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from src.qiming.database.connection import db_manager, Base
 from src.api.auth import router as auth_router
+from src.api.chat import router as chat_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -19,6 +20,8 @@ app = FastAPI(title="启明智手 API", version="0.1.0", lifespan=lifespan)
 
 # 注册认证路由
 app.include_router(auth_router)
+# 注册对话 WebSocket 路由（前端 <-> 大模型通信）
+app.include_router(chat_router)
 
 # 根路径，用于健康检查
 @app.get("/")
