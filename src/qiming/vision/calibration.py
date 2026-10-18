@@ -11,13 +11,15 @@ from src.qiming.arm_control.mycobot_driver import MyCobotDriver
 class EyeToHandCalibrator:
     """
     Eye-to-Hand (眼在手外) 手眼标定框架
-    
-    相机固定在外部，标定板固定在机械臂末端。
-    核心方程: AX = XB
-    
-    A = T_E2B * inv(T_E1B)  -- 两次机械臂位姿的相对变换
-    B = T_K2C * inv(T_K1C)  -- 两次视觉观测的相对变换
-    X = T_BC                -- 相机在基坐标系下的外参（待求解）
+
+    相机固定在外部，标定板固定在机械臂末端。记
+        T_g2b(i) : 末端在基坐标系下的位姿（机械臂正解给出，单位 mm）
+        T_t2c(i) : 标定板在相机坐标系下的位姿（solvePnP 给出，单位 m）
+        T_t2g    : 标定板在末端坐标系下的固定位姿（未知，与位姿无关）
+        X = T_BC : 相机在基坐标系下的外参（待求解）
+    物理关系: T_t2c(i) = inv(X) @ T_g2b(i) @ T_t2g
+    对任意两组位姿 (i, j) 消去未知的 T_t2g 即得核心方程 (AX = XB 形式):
+        T_g2b_i @ inv(T_g2b_j) = X @ (T_t2c_i @ inv(T_t2c_j)) @ inv(X)
     """
 
     def __init__(self, depth_camera: DepthCamera, arm_driver: MyCobotDriver):
@@ -211,22 +213,24 @@ class EyeToHandCalibrator:
 
     def calibrate_hand_eye(self, method: int = cv2.CALIB_HAND_EYE_TSAI) -> Optional[np.ndarray]:
         """
-        求解手眼标定方程 AX = XB，得到相机在基坐标系下的外参 T_BC。
+        求解手眼标定方程，得到相机在基坐标系下的外参 T_BC。
 
-        Eye-to-Hand 配置下相机固定、标定板固定在机械臂末端，令
-            T_g2b : 末端在基坐标系下的位姿 (由机械臂正解给出)
-            T_t2c : 标定板在相机坐标系下的位姿 (由 solvePnP 给出)
-        则相机外参 X = T_cam2base 满足 (T_g2b_j)^{-1} T_g2b_i X = X (T_t2c_j)(T_t2c_i)^{-1}。
+        Eye-to-Hand 配置下相机固定、标定板固定在机械臂末端，物理关系为
+            T_t2c(i) = inv(T_BC) @ T_g2b(i) @ T_t2g
+        其中 T_BC 为待求的相机在基坐标系下的外参。OpenCV 的 calibrateHandEye
+        约定输入 gripper2base，因此 Eye-to-Hand 场景需要传入「基坐标系 -> 末端」的
+        变换（即 T_g2b 的逆），此时返回的即为 T_c2b = T_BC。
 
-        OpenCV 的 calibrateHandEye 约定输入 gripper2base，因此 Eye-to-Hand 场景
-        需要传入「基坐标系 -> 末端」的变换（即 T_g2b 的逆），此时返回的 X 即为
-        T_cam2base = T_BC。
+        单位: 标定板 objp 由 SQUARE_SIZE(米) 生成，solvePnP 输出的平移为米，
+        而机械臂位姿为毫米。两者混用只会破坏平移解（旋转部分仅由旋转矩阵决定，
+        不受影响），因此这里统一换算到米求解，再把 T_BC 的平移换算回毫米，
+        保证 T_BC 可直接把「相机 mm 坐标」映射为「基坐标 mm 坐标」。
 
         参数:
             method: OpenCV 手眼标定方法，见 cv2.HandEyeCalibrationMethod
 
         返回:
-            T_BC: 相机在基坐标系下的外参 (4x4)，数据不足时返回 None
+            T_BC: 相机在基坐标系下的外参 (4x4，平移单位 mm)，数据不足时返回 None
         """
         if len(self.robot_poses) < 3:
             print("[错误] 手眼标定至少需要 3 组数据")
@@ -239,16 +243,19 @@ class EyeToHandCalibrator:
             print("[错误] 机械臂位姿和视觉观测数据数量不匹配")
             return None
 
-        # Eye-to-Hand: 传入 base2gripper (即 gripper2base 的逆)
+        to_meter = 1e-3
+
+        # Eye-to-Hand: 传入 base2gripper (即 gripper2base 的逆)，位姿统一换算到米
         r_base2gripper = []
         t_base2gripper = []
         for rotation_matrix, translation_vector in self.robot_poses:
             T_g2b = self.get_transform_matrix(rotation_matrix, translation_vector)
+            T_g2b[:3, 3] *= to_meter
             T_b2g = np.linalg.inv(T_g2b)
             r_base2gripper.append(T_b2g[:3, :3])
             t_base2gripper.append(T_b2g[:3, 3].reshape(3, 1))
 
-        # 标定板在相机坐标系下的位姿
+        # 标定板在相机坐标系下的位姿（平移单位已是米）
         r_target2cam = [obs[0] for obs in self.camera_observations]
         t_target2cam = [obs[1].reshape(3, 1) for obs in self.camera_observations]
 
@@ -261,6 +268,7 @@ class EyeToHandCalibrator:
         )
 
         T_BC = self.get_transform_matrix(r_cam2base, t_cam2base)
+        T_BC[:3, 3] /= to_meter  # 米 -> 毫米，使 T_BC 与工程中 mm 坐标一致
         self.T_BC = T_BC
         self._calibrated = True
         self.depth_camera.T_cam2end = T_BC  # 复用现有属性名
@@ -268,7 +276,7 @@ class EyeToHandCalibrator:
         print("\n" + "=" * 50)
         print("[结果] 手眼标定完成!")
         print("=" * 50)
-        print("T_BC (相机在基坐标系下的外参):")
+        print("T_BC (相机在基坐标系下的外参, 平移单位 mm):")
         print(T_BC)
 
         mean_rot, max_rot, mean_trans = self.compute_calibration_error(T_BC)
@@ -283,11 +291,14 @@ class EyeToHandCalibrator:
         """
         计算手眼标定的一致性残差。
 
-        对任意两组位姿 (i, j)，机械臂相对运动
-            A = T_g2b_j @ inv(T_g2b_i)
-        与相机解算出的相对运动
-            A' = T_BC @ T_t2c_j @ inv(T_t2c_i) @ inv(T_BC)
-        应当一致。这里以两者旋转部分的角度差、平移部分的距离差作为残差。
+        由物理关系 T_t2c(i) = inv(T_BC) @ T_g2b(i) @ T_t2g 可知，对任意两组位姿 (i, j)
+        消去未知的 T_t2g 后应满足：
+            T_BC @ (T_t2c_i @ inv(T_t2c_j)) @ inv(T_BC) == T_g2b_i @ inv(T_g2b_j)
+        右侧是机械臂的相对运动，左侧是由相机观测相对运动经外参换算出的同一运动，
+        以两侧旋转部分的角度差、平移部分的距离差作为残差。
+
+        单位: 比较在「米」下进行（相机观测本身即米，机械臂位姿为毫米需换算），
+        报告时平移换算回 mm。
 
         返回:
             (平均姿态残差(度), 最大姿态残差(度), 平均平移残差(mm))
@@ -297,29 +308,33 @@ class EyeToHandCalibrator:
         if T_BC is None or len(self.robot_poses) < 2:
             return 0.0, 0.0, 0.0
 
-        T_BC_inv = np.linalg.inv(T_BC)
+        to_meter = 1e-3
+        X = np.asarray(T_BC, dtype=float).copy()
+        X[:3, 3] *= to_meter          # 统一换算到米
+        X_inv = np.linalg.inv(X)
+
         rotation_errors = []
         translation_errors = []
 
         for i in range(len(self.robot_poses)):
             for j in range(i + 1, len(self.robot_poses)):
-                R_i, t_i = self.robot_poses[i]
-                R_j, t_j = self.robot_poses[j]
-                A = self.get_transform_matrix(R_j, t_j) @ np.linalg.inv(
-                    self.get_transform_matrix(R_i, t_i))
+                P_i = self.get_transform_matrix(*self.robot_poses[i])
+                P_j = self.get_transform_matrix(*self.robot_poses[j])
+                P_i[:3, 3] *= to_meter
+                P_j[:3, 3] *= to_meter
+                A = P_i @ np.linalg.inv(P_j)          # 机械臂相对运动
 
-                R_ci, t_ci = self.camera_observations[i]
-                R_cj, t_cj = self.camera_observations[j]
-                B = self.get_transform_matrix(R_cj, t_cj) @ np.linalg.inv(
-                    self.get_transform_matrix(R_ci, t_ci))
-                A_pred = T_BC @ B @ T_BC_inv
+                O_i = self.get_transform_matrix(*self.camera_observations[i])
+                O_j = self.get_transform_matrix(*self.camera_observations[j])
+                B = O_i @ np.linalg.inv(O_j)          # 相机观测到的标定板相对运动
+                A_pred = X @ B @ X_inv                # 经外参换算出的同一相对运动
 
                 R_diff = A[:3, :3].T @ A_pred[:3, :3]
                 cos_angle = (np.trace(R_diff) - 1.0) / 2.0
                 rotation_errors.append(
                     float(np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))))
                 translation_errors.append(
-                    float(np.linalg.norm(A[:3, 3] - A_pred[:3, 3])))
+                    float(np.linalg.norm(A[:3, 3] - A_pred[:3, 3])) / to_meter)
 
         if not rotation_errors:
             return 0.0, 0.0, 0.0

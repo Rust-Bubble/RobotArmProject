@@ -107,6 +107,11 @@ class DepthCamera:
 
     def save_current_frames(self, current_frame=None):
         import cv2
+        import time
+
+        # 未指定编号时用时间戳命名，避免落成 "None_HandEye.png"
+        if current_frame is None:
+            current_frame = time.strftime("%Y%m%d_%H%M%S")
 
         save_path = self.HandEye_calibration_img
 
@@ -153,7 +158,7 @@ class DepthCamera:
             if not save_success:
                 print(f"第 {current_time} 次拍摄保存失败，将重新尝试")
                 input("请确认标定板位置后按 Enter 键重新拍摄...")
-                self.save_current_frames()
+                self.save_current_frames(current_time)
 
             print("\n手眼标定完成！图像已保存到:")
             print(f"{self.HandEye_calibration_img}")
@@ -257,28 +262,46 @@ class DepthCamera:
         return objpoints, imgpoints, success_calibration_count
 
     def get_depth_value(self, y, x):
+        """读取深度图像 (row=y, col=x) 处的深度值，单位 mm；帧不可用或越界时返回 None。"""
         color_cframe, depth_cframe = self.get_frames()
 
-        if y > 480 or x > 640 or x < 0 or y < 0:
-            print("超出深度图像范围")
-        else:
-            return depth_cframe[y, x]
+        if depth_cframe is None:
+            print("深度帧不可用，无法读取深度值")
+            return None
 
-    def get_obj_in_camera(self, y, x):
+        height, width = depth_cframe.shape[:2]
+        if y < 0 or y >= height or x < 0 or x >= width:
+            print(f"超出深度图像范围: ({x}, {y}) 不在 {width}x{height} 内")
+            return None
+
+        return int(depth_cframe[y, x])
+
+    def get_obj_in_camera(self, y, x, max_retry: int = 30):
+        """像素坐标 (col=x, row=y) -> 相机坐标系坐标 [X, Y, Z]，单位 mm。
+
+        内参矩阵需已标定；深度连续为 0 时最多重试 max_retry 帧，仍无效则抛错，
+        避免早期实现中 "while depth_value == 0" 导致的死循环。
+        """
         import numpy as np
+
+        if self.intrinsic_matrix is None:
+            raise RuntimeError("相机内参未标定，无法把像素坐标转换为相机坐标")
+
+        depth_value = self.get_depth_value(y, x)
+        retry = 0
+        while depth_value == 0 and retry < max_retry:
+            depth_value = self.get_depth_value(y, x)
+            retry += 1
+
+        if depth_value is None:
+            raise RuntimeError(f"像素坐标 ({x}, {y}) 超出深度图范围")
+        if depth_value == 0:
+            raise RuntimeError(
+                f"像素坐标 ({x}, {y}) 连续 {max_retry} 帧深度值为 0，请确认目标未被遮挡")
 
         inverse_intrinsic_matrix = np.linalg.inv(self.intrinsic_matrix)
 
-        obj_img_poisition = np.array([[y],
-                                      [x],
-                                      [1]])
+        # 齐次像素坐标为 [x, y, 1]：x 是列(宽度)方向，y 是行(高度)方向
+        obj_img_position = np.array([[x], [y], [1.0]])
 
-        depth_value = self.get_depth_value(y, x)
-
-        if depth_value == 0:
-            print("检测目标的深度值为0！请移动物体！")
-
-        while depth_value == 0:
-            depth_value = self.get_depth_value(y, x)
-
-        return np.dot(inverse_intrinsic_matrix, obj_img_poisition) * depth_value
+        return np.dot(inverse_intrinsic_matrix, obj_img_position) * depth_value
