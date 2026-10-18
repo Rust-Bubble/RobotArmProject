@@ -22,6 +22,7 @@ import {
   login,
   register,
 } from "./api/auth";
+import { SpeakButton, VoiceInput } from "./SpeechControls";
 
 interface Message {
   id: number;
@@ -211,12 +212,12 @@ export default function App() {
   };
 
   // ---------- 发送文本 ----------
-  const sendText = () => {
-    const content = input.trim();
+  const sendText = (rawText: string = input) => {
+    const content = rawText.trim();
     if (!content || waiting || !clientRef.current?.ready) return;
     setInput("");
     setNotice("");
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", text: content, meta: "文本输入" }]);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", text: content, meta: rawText === input ? "文本输入" : "语音输入" }]);
     setEvents([]);
     setWaiting(true);
     clientRef.current.sendText(content);
@@ -228,11 +229,6 @@ export default function App() {
     setTask(EMPTY_TASK);
     setWaiting(false);
     setNotice("");
-  };
-
-  // ---------- 麦克风（STT 未接入，保留按钮占位） ----------
-  const onMicClick = () => {
-    setNotice("语音识别（STT）尚未接入，请先用文本输入与 Agent 对话。");
   };
 
   // ================= 登录视图 =================
