@@ -12,3 +12,11 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
     with Path(path).open("r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return data or {}
+
+
+def save_yaml(path: str | Path, data: dict[str, Any]) -> None:
+    """把配置写回 YAML 文件（保留中文，不重排键顺序）。"""
+    import yaml
+
+    with Path(path).open("w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=None)
