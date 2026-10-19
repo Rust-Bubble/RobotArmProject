@@ -9,6 +9,7 @@
     {"type": "ping"}
 
 后端 -> 前端 (事件流，见 Orchestrator.handle):
+    {"type": "robot_status", "state": "busy", "phase": "...", ...}
     {"type": "status",       "stage": "...", "message": "..."}
     {"type": "intent",       "intent": "动作指令", "agent": "action"}
     {"type": "agent_start",  "agent": "action"}
@@ -17,12 +18,15 @@
     {"type": "error",        "message": "..."}
     {"type": "done"}
     {"type": "pong"}
+
+连接建立后会先推送一条 robot_status 快照，供前端「机械臂状态」卡片初始化。
 """
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from src.api.auth_utils import decode_token
+from src.qiming.arm_control.status import status_hub
 from src.qiming.database.connection import db_manager
 from src.qiming.database.models import User
 from src.qiming.orchestrator.orchestrator import MockOrchestrator, Orchestrator
@@ -67,6 +71,9 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
     await websocket.accept()
     # 每个连接一个独立会话（独立对话历史）
     orchestrator = _build_orchestrator()
+
+    # 先推一条机械臂状态快照，让前端状态卡片在连接建立时就有内容
+    await websocket.send_json({"type": "robot_status", **status_hub.snapshot()})
 
     try:
         while True:

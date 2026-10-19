@@ -14,6 +14,7 @@ import {
 import {
   ChatClient,
   type ChatEvent,
+  type RobotStatusEvent,
   type ToolResultEvent,
 } from "./api/chatClient";
 import {
@@ -44,6 +45,29 @@ interface TaskInfo {
 
 const EMPTY_TASK: TaskInfo = { intent: "—", target: "—", params: "—" };
 
+/** 机械臂工作状态（后端 arm_control/status.py 的 RobotStatusHub 快照） */
+interface RobotStatus {
+  state: string; // idle / busy / estop
+  phase: string;
+  driver: string;
+  target: string;
+  updated_at: string;
+}
+
+const EMPTY_ROBOT: RobotStatus = {
+  state: "idle",
+  phase: "待机中",
+  driver: "-",
+  target: "",
+  updated_at: "",
+};
+
+const ROBOT_STATE_LABELS: Record<string, string> = {
+  idle: "空闲",
+  busy: "执行中",
+  estop: "已急停",
+};
+
 let messageSeq = 0;
 const nextId = () => ++messageSeq;
 
@@ -65,6 +89,7 @@ export default function App() {
   const [wsConnected, setWsConnected] = useState(false);
   const [task, setTask] = useState<TaskInfo>(EMPTY_TASK);
   const [events, setEvents] = useState<EventRow[]>([]);
+  const [robot, setRobot] = useState<RobotStatus>(EMPTY_ROBOT);
 
   const clientRef = useRef<ChatClient | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
@@ -118,6 +143,17 @@ export default function App() {
             cls: toolEvent.ok ? "complete" : "error",
           },
         ]);
+        break;
+      }
+      case "robot_status": {
+        const statusEvent = event as RobotStatusEvent;
+        setRobot({
+          state: statusEvent.state ?? "idle",
+          phase: statusEvent.phase ?? "",
+          driver: statusEvent.driver ?? "-",
+          target: statusEvent.target ?? "",
+          updated_at: statusEvent.updated_at ?? "",
+        });
         break;
       }
       case "error":
@@ -192,6 +228,7 @@ export default function App() {
       setMessages([]);
       setEvents([]);
       setTask(EMPTY_TASK);
+      setRobot(EMPTY_ROBOT);
       setAuthed(true);
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : "操作失败");
@@ -207,6 +244,7 @@ export default function App() {
     setMessages([]);
     setEvents([]);
     setTask(EMPTY_TASK);
+    setRobot(EMPTY_ROBOT);
     setWsConnected(false);
   };
 
@@ -478,6 +516,36 @@ export default function App() {
                     ? "Orchestrator 正在识别意图并分发任务。"
                     : "上一轮任务已结束，等待新的指令。"}
               </p>
+            </section>
+
+            <section className="console-section robot-card">
+              <div className="section-label">
+                <span>机械臂状态</span>
+                <small>{robot.updated_at || "—"}</small>
+              </div>
+
+              <div className={`robot-state ${robot.state}`}>
+                <i />
+                <strong>{ROBOT_STATE_LABELS[robot.state] ?? robot.state}</strong>
+                <small>
+                  {robot.state === "busy" ? "动作进行中" : robot.state === "estop" ? "等待复位" : "可接受指令"}
+                </small>
+              </div>
+
+              <dl className="task-fields">
+                <div>
+                  <dt>当前阶段</dt>
+                  <dd>{robot.phase || "—"}</dd>
+                </div>
+                <div>
+                  <dt>驱动模式</dt>
+                  <dd>{robot.driver || "—"}</dd>
+                </div>
+                <div>
+                  <dt>目标物体</dt>
+                  <dd>{robot.target || "—"}</dd>
+                </div>
+              </dl>
             </section>
 
             <section className="console-section">

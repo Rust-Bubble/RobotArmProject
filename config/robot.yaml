@@ -7,6 +7,8 @@ robot:
   handover_coords: [80.0, -220.0, 180.0, 0.0, 0.0, 0.0]
   # 抓取时使用的末端姿态预设，见 src/qiming/arm_control/pose_presets.py
   grasp_preset: "top_down"
+  # 放置/递送时使用的末端姿态预设
+  place_preset: "top_down_place"
   gripper:
     open_value: 80
     close_value: 20

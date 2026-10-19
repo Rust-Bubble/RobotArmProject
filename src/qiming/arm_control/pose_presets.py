@@ -81,6 +81,8 @@ _PRESETS: List[PosePreset] = [
 
 PRESETS: Dict[str, PosePreset] = {preset.name: preset for preset in _PRESETS}
 DEFAULT_PRESET_NAME = "top_down"
+# 放置阶段默认使用的预设（垂直下放、接近高度更小，落位更平稳）
+DEFAULT_PLACE_PRESET_NAME = "top_down_place"
 
 
 def get_preset(name: str) -> PosePreset:

@@ -125,7 +125,7 @@ def main() -> int:
     detector = YoloDetector()
     mllm = MllmRecognizer(llm_cfg)
     converter = CoordinateConverter(depth_camera, arm_driver)
-    arm = ArmController(arm_driver)
+    arm = ArmController(arm_driver, robot_cfg)
 
     # 加载标定配置 (内参矩阵、外参矩阵)
     _setup_calibration_config(depth_camera, converter, calib_cfg)

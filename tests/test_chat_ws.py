@@ -44,6 +44,15 @@ def token(client):
     return create_access_token({"sub": str(user_id)})
 
 
+def recv_initial_status(ws) -> dict:
+    """连接建立后后端会先推送一条机械臂状态快照，供前端状态卡片初始化。"""
+    snapshot = ws.receive_json()
+    assert snapshot["type"] == "robot_status"
+    assert snapshot["state"] in {"idle", "busy", "estop"}
+    assert "phase" in snapshot and "driver" in snapshot
+    return snapshot
+
+
 class TestWsAuth:
     def test_invalid_token_rejected(self, client):
         # 4401 是约定好的"未认证"关闭码，前端据此跳转登录
@@ -59,11 +68,13 @@ class TestWsAuth:
 class TestWsChat:
     def test_ping_pong(self, client, token):
         with client.websocket_connect(f"/ws/chat?token={token}") as ws:
+            recv_initial_status(ws)
             ws.send_json({"type": "ping"})
             assert ws.receive_json() == {"type": "pong"}
 
     def test_full_chat_round(self, client, token):
         with client.websocket_connect(f"/ws/chat?token={token}") as ws:
+            recv_initial_status(ws)
             ws.send_json({"type": "text", "content": "今天天气真不错"})
 
             events = []
@@ -81,6 +92,7 @@ class TestWsChat:
 
     def test_action_round_dispatches_tool(self, client, token):
         with client.websocket_connect(f"/ws/chat?token={token}") as ws:
+            recv_initial_status(ws)
             ws.send_json({"type": "text", "content": "帮我拿一下水杯"})
 
             events = []
@@ -96,8 +108,14 @@ class TestWsChat:
         assert tool_events[0]["ok"] is True
         assert events[-1]["type"] == "done"
 
+        # 动作执行期间机械臂状态被实时推送，供前端状态卡片刷新
+        status_events = [e for e in events if e["type"] == "robot_status"]
+        assert any(e["state"] == "busy" for e in status_events)
+        assert status_events[-1]["state"] == "idle"
+
     def test_invalid_message_type_ignored(self, client, token):
         with client.websocket_connect(f"/ws/chat?token={token}") as ws:
+            recv_initial_status(ws)
             ws.send_json({"type": "unknown_type"})
             ws.send_json({"type": "ping"})
             # 非法消息被忽略，不影响后续心跳

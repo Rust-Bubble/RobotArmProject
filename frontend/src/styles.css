@@ -445,6 +445,53 @@ a:focus-visible {
   line-height: 1.65;
 }
 
+/* ========== 机械臂状态卡片 ========== */
+.robot-state {
+  margin-top: 17px;
+  min-height: 44px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.robot-state i {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: #8db45c;
+  box-shadow: 0 0 0 4px rgba(141, 180, 92, 0.12);
+}
+
+.robot-state strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.robot-state small {
+  margin-left: auto;
+  color: #80817c;
+  font-size: 8px;
+}
+
+.robot-state.busy i {
+  background: var(--orange);
+  box-shadow: 0 0 0 4px rgba(237, 92, 43, 0.14);
+  animation: blink 1.1s ease-in-out infinite;
+}
+
+.robot-state.estop i {
+  background: #d9534f;
+  box-shadow: 0 0 0 4px rgba(217, 83, 79, 0.16);
+}
+
+.robot-card .task-fields {
+  margin-top: 13px;
+}
+
 .event-stream {
   margin-top: 17px;
 }
