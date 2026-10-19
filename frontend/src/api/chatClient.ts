@@ -9,6 +9,16 @@ export interface ToolResultEvent {
   error?: string;
 }
 
+/** 机械臂状态事件：由 ArmController 逐步上报，见后端 arm_control/status.py */
+export interface RobotStatusEvent {
+  type: "robot_status";
+  state?: string; // idle / busy / estop
+  phase?: string;
+  driver?: string;
+  target?: string;
+  updated_at?: string;
+}
+
 export type ChatEvent =
   | ({
       type: "status" | "intent" | "agent_start" | "agent_result" | "error" | "done" | "pong";
@@ -30,7 +40,8 @@ export type ChatEvent =
         command?: string;
       } | null;
     })
-  | ToolResultEvent;
+  | ToolResultEvent
+  | RobotStatusEvent;
 
 export interface ChatClientHandlers {
   onOpen?: () => void;

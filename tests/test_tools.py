@@ -3,6 +3,7 @@
 
 import pytest
 
+from src.qiming.arm_control.status import status_hub
 from src.qiming.tools.builtin import create_default_registry
 from src.qiming.tools.registry import Tool, ToolRegistry
 
@@ -103,9 +104,13 @@ class TestBuiltinRegistry:
 
     def test_query_robot_status(self):
         reg = create_default_registry()
+        # 状态中心是进程级单例，先复位以保证断言与执行顺序无关
+        status_hub.reset()
         result = reg.execute("query_robot_status", {})
         assert result["ok"] is True
         assert result["result"]["status"] == "idle"
+        assert result["result"]["state"] == "idle"
+        assert "phase" in result["result"] and "updated_at" in result["result"]
 
     def test_emergency_stop(self):
         reg = create_default_registry()
