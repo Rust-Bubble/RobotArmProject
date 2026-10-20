@@ -12,6 +12,7 @@ import asyncio
 from typing import Any, AsyncIterator
 
 from src.qiming.mllm.recognizer import MllmRecognizer
+from src.qiming.arm_control.status import status_hub
 from src.qiming.orchestrator.agents import (
     ActionAgent,
     BaseAgent,
@@ -55,6 +56,7 @@ class Orchestrator:
             status       进度提示        {stage, message}
             intent       意图识别结果    {intent, agent}
             agent_start  子 Agent 开始   {agent}
+            robot_status 机械臂状态更新  {state, phase, driver, target, updated_at}
             tool_result  工具执行结果    {tool, ok, result|error}
             agent_result 子 Agent 结束   {agent, message, task}
             error        出错            {message}
@@ -91,9 +93,10 @@ class Orchestrator:
         tool_call = self._tool_call_for_task(result["task"])
         if tool_call is not None:
             tool_name, tool_args = tool_call
-            tool_result = await asyncio.to_thread(
-                self.tool_registry.execute, tool_name, tool_args
-            )
+            holder: dict[str, Any] = {}
+            async for event in self._run_tool_streaming(tool_name, tool_args, holder):
+                yield event
+            tool_result = holder["result"]
             yield {"type": "tool_result", "tool": tool_name, **tool_result}
 
         self.history.append({"role": "user", "text": user_text})
@@ -107,6 +110,39 @@ class Orchestrator:
             "tool_result": tool_result,
         }
         yield {"type": "done"}
+
+    async def _run_tool_streaming(self, name: str, args: dict[str, Any], holder: dict[str, Any]):
+        """在线程中执行工具，并把执行期间的机械臂状态实时 yield 出去。
+
+        状态由 ArmController 在子线程里写入 status_hub（见 arm_control/status.py）。
+        这里把子线程回调经事件循环队列转成事件流，前端「机械臂状态」卡片因此能在
+        动作进行中逐步更新，而不是等整个动作结束才一次性刷新。
+        工具返回值通过 holder["result"] 带回给调用方。
+        """
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+        token = status_hub.subscribe(
+            lambda snapshot: loop.call_soon_threadsafe(queue.put_nowait, snapshot))
+
+        task = asyncio.create_task(
+            asyncio.to_thread(self.tool_registry.execute, name, args))
+        try:
+            while True:
+                getter = asyncio.create_task(queue.get())
+                done, _pending = await asyncio.wait(
+                    {getter, task}, return_when=asyncio.FIRST_COMPLETED)
+                if getter in done:
+                    yield {"type": "robot_status", **getter.result()}
+                    continue
+                # 工具已结束：取消这次等待，收尾后再补发残留状态
+                getter.cancel()
+                break
+
+            holder["result"] = await task
+            while not queue.empty():
+                yield {"type": "robot_status", **queue.get_nowait()}
+        finally:
+            status_hub.unsubscribe(token)
 
     def _recognize_intent(self, user_text: str) -> str:
         """调用 MLLM 做意图识别，返回意图字符串。"""
@@ -187,9 +223,10 @@ class MockOrchestrator(Orchestrator):
         tool_call = self._tool_call_for_task(task)
         if tool_call is not None:
             tool_name, tool_args = tool_call
-            tool_result = await asyncio.to_thread(
-                self.tool_registry.execute, tool_name, tool_args
-            )
+            holder: dict[str, Any] = {}
+            async for event in self._run_tool_streaming(tool_name, tool_args, holder):
+                yield event
+            tool_result = holder["result"]
             yield {"type": "tool_result", "tool": tool_name, **tool_result}
 
         self.history.append({"role": "user", "text": user_text})

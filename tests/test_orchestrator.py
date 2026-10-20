@@ -47,7 +47,9 @@ class TestMockOrchestrator:
         orch = MockOrchestrator()
         events = collect_events(orch, "帮我拿一下水杯")
 
-        types = [e["type"] for e in events]
+        # 动作执行期间会穿插 robot_status 事件（供前端机械臂状态卡片实时刷新），
+        # 这里校验其余事件仍保持原有顺序与内容。
+        types = [e["type"] for e in events if e["type"] != "robot_status"]
         assert types == [
             "status", "intent", "agent_start",
             "tool_result", "agent_result", "done",
@@ -56,12 +58,19 @@ class TestMockOrchestrator:
         assert intent_event["intent"] == "动作指令"
         assert intent_event["agent"] == "action"
 
+        # 机械臂状态被逐步上报：动作执行中有 busy，动作结束后回到 idle
+        status_events = [e for e in events if e["type"] == "robot_status"]
+        assert status_events, "应上报机械臂状态"
+        assert any(e["state"] == "busy" for e in status_events)
+        assert status_events[-1]["state"] == "idle"
+        assert any(e.get("phase") == "闭合夹爪" for e in status_events)
+
         # 动作任务被分发到 execute_grasp 工具
-        tool_event = events[3]
+        tool_event = next(e for e in events if e["type"] == "tool_result")
         assert tool_event["tool"] == "execute_grasp"
         assert tool_event["ok"] is True
 
-        result = events[4]
+        result = next(e for e in events if e["type"] == "agent_result")
         assert result["task"]["type"] == "action"
         # 历史被记录
         assert orch.history[-2]["role"] == "user"

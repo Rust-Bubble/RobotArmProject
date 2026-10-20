@@ -13,7 +13,7 @@ from src.qiming.arm_control.mock_driver import MockArmDriver
 from src.qiming.feedback.tts import TtsFeedback
 from src.qiming.mllm.recognizer import MllmRecognizer
 from src.qiming.speech.voice import VoiceIO
-from src.qiming.utils.config import load_yaml
+from src.qiming.utils.config import load_yaml, save_yaml
 from src.qiming.vision.camera import Camera
 from src.qiming.vision.depth_camera import DepthCamera
 from src.qiming.vision.coordinate import CoordinateConverter
@@ -72,17 +72,42 @@ def _setup_calibration_config(depth_camera, converter, calib_cfg):
             print(f"[警告] 加载 T_CE 矩阵失败: {e}")
 
 
+def _save_calibration_to_config(config_path, full_cfg, calibrator, T_BC):
+    """
+    把手眼标定结果写回配置文件，下次启动即可直接加载，无需手工抄写矩阵。
+
+    参数:
+        config_path: 配置文件路径
+        full_cfg: 完整配置字典
+        calibrator: EyeToHandCalibrator 实例（用于取内参）
+        T_BC: 标定得到的相机外参 (4x4)
+    """
+    calib_cfg = full_cfg.setdefault("robot", {}).setdefault("hand_eye_calibration", {})
+    calib_cfg["T_BC"] = np.asarray(T_BC).tolist()
+    if calibrator.camera_intrinsic_matrix is not None:
+        calib_cfg["intrinsic_matrix"] = np.asarray(calibrator.camera_intrinsic_matrix).tolist()
+    if calibrator.camera_dist_coeffs is not None:
+        calib_cfg["dist_coeffs"] = np.asarray(calibrator.camera_dist_coeffs).reshape(-1).tolist()
+
+    save_yaml(config_path, full_cfg)
+    print(f"[保存] 手眼标定结果已写回 {config_path}（原文件注释会丢失）")
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="运行启明智手简化流程。")
     parser.add_argument("--text", help="用文本模拟语音指令。")
     parser.add_argument("--calibrate", action="store_true", help="执行手眼标定流程。")
+    parser.add_argument("--save-config", action="store_true",
+                        help="配合 --calibrate 使用，把标定结果写回 config/robot.yaml。")
     parser.add_argument("--show-frame", action="store_true", help="显示摄像头画面。")
     return parser
 
 
 def main() -> int:
     args = build_arg_parser().parse_args()
-    robot_cfg = load_yaml("config/robot.yaml")["robot"]
+    config_path = "config/robot.yaml"
+    full_cfg = load_yaml(config_path)
+    robot_cfg = full_cfg["robot"]
     llm_cfg = load_yaml("config/llm.yaml")["llm"]
     camera_cfg = robot_cfg.get("camera", {})
     calib_cfg = robot_cfg.get("hand_eye_calibration", {})
@@ -100,7 +125,7 @@ def main() -> int:
     detector = YoloDetector()
     mllm = MllmRecognizer(llm_cfg)
     converter = CoordinateConverter(depth_camera, arm_driver)
-    arm = ArmController(arm_driver)
+    arm = ArmController(arm_driver, robot_cfg)
 
     # 加载标定配置 (内参矩阵、外参矩阵)
     _setup_calibration_config(depth_camera, converter, calib_cfg)
@@ -114,7 +139,19 @@ def main() -> int:
         calibrator.calibration_times = calib_cfg.get("calibration_times", 20)
         calibrator.CHESSBOARD_SIZE = tuple(calib_cfg.get("chessboard_size", [9, 6]))
         calibrator.SQUARE_SIZE = calib_cfg.get("square_size", 0.025)
-        calibrator.run_calibration()
+
+        # 标定流程依赖内参做 solvePnP，这里把配置中的内参同步给标定器
+        if depth_camera.intrinsic_matrix is not None and depth_camera.dist_coeffs is not None:
+            calibrator.set_intrinsic_matrix(depth_camera.intrinsic_matrix, depth_camera.dist_coeffs)
+
+        result = calibrator.run_calibration()
+        if result is None:
+            print("[错误] 手眼标定未完成，配置未更新")
+            return 1
+
+        if args.save_config:
+            _save_calibration_to_config(config_path, full_cfg, calibrator, result)
+
         feedback.say("手眼标定完成。")
         return 0
 
