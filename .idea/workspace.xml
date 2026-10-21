@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="34536e7d-9a33-4149-b4ea-1898fafd0795" name="更改" comment="意图识别完善" />
+    <list default="true" id="34536e7d-9a33-4149-b4ea-1898fafd0795" name="更改" comment="动作分解" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -160,7 +160,39 @@
       <option name="project" value="LOCAL" />
       <updated>1785931404220</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="意图识别完善">
+      <option name="closed" value="true" />
+      <created>1792573349829</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1792573349829</updated>
+    </task>
+    <task id="LOCAL-00003" summary="动作分解">
+      <option name="closed" value="true" />
+      <created>1792573365416</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1792573365416</updated>
+    </task>
+    <task id="LOCAL-00004" summary="动作分解">
+      <option name="closed" value="true" />
+      <created>1792573431457</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1792573431457</updated>
+    </task>
+    <task id="LOCAL-00005" summary="动作分解">
+      <option name="closed" value="true" />
+      <created>1792573475589</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1792573475589</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -200,6 +232,7 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="意图识别完善" />
-    <option name="LAST_COMMIT_MESSAGE" value="意图识别完善" />
+    <MESSAGE value="动作分解" />
+    <option name="LAST_COMMIT_MESSAGE" value="动作分解" />
   </component>
 </project>
