@@ -65,7 +65,7 @@
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;
   }
 }</component>
-  <component name="RunManager" selected="Python.recognizer">
+  <component name="RunManager" selected="Python 测试.Python 测试 (test_orchestrator.py 内)">
     <configuration name="python -m src.main --text &quot;帮我拿桌上的水杯&quot;" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="qiming-smart-hand" />
       <option name="ENV_FILES" value="" />
@@ -114,8 +114,26 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="Python 测试 (test_orchestrator.py 内)" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
+      <module name="qiming-smart-hand" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <option name="RUN_TOOL" value="" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;$PROJECT_DIR$/tests/test_orchestrator.py&quot;" />
+      <option name="_new_targetType" value="&quot;PATH&quot;" />
+      <method v="2" />
+    </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python 测试.Python 测试 (test_orchestrator.py 内)" />
         <item itemvalue="Python.recognizer" />
         <item itemvalue="Python.python -m src.main --text &quot;帮我拿桌上的水杯&quot;" />
       </list>

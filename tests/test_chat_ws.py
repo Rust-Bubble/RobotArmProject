@@ -113,6 +113,27 @@ class TestWsChat:
         assert any(e["state"] == "busy" for e in status_events)
         assert status_events[-1]["state"] == "idle"
 
+    def test_compound_action_round_dispatches_multiple_tools(self, client, token):
+        with client.websocket_connect(f"/ws/chat?token={token}") as ws:
+            recv_initial_status(ws)
+            ws.send_json({"type": "text", "content": "先把苹果拿过来，再把杯子放到桌上"})
+
+            events = []
+            while True:
+                event = ws.receive_json()
+                events.append(event)
+                if event["type"] == "done":
+                    break
+
+        step_events = [e for e in events if e["type"] == "step"]
+        assert len(step_events) == 2
+
+        tool_events = [e for e in events if e["type"] == "tool_result"]
+        assert len(tool_events) == 2
+        assert all(e["tool"] == "execute_grasp" for e in tool_events)
+        assert all(e["ok"] is True for e in tool_events)
+        assert events[-1]["type"] == "done"
+
     def test_invalid_message_type_ignored(self, client, token):
         with client.websocket_connect(f"/ws/chat?token={token}") as ws:
             recv_initial_status(ws)

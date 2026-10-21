@@ -103,7 +103,7 @@ class MllmRecognizer:
             请以[(x坐标,y坐标)]的格式输出。
         """
 
-        action = self.agentCommunication("qwen3-vl-flash",system_prompt,userInfo,imageInfo,Action)
+        action = self.agentCommunication("qwen3-vl-plus",system_prompt,userInfo,imageInfo,Action)
         return action
 
     def tendRecognizer(self,userInfo):
@@ -118,6 +118,8 @@ class MllmRecognizer:
         请在以上四种类型中选择最接近用户指令意图的类型，并返回该类型。
         请勿返回四种类型以外的其他内容。
         """
-        res = self.agentCommunication("qwen-flash",system_prompt,userInfo)
+        res = self.agentCommunication("qwen3-vl-plus",system_prompt,userInfo)
         return res
 
+
+    

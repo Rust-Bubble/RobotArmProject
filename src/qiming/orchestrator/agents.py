@@ -25,12 +25,19 @@ class _AgentResult(BaseModel):
 
 
 class ActionPlan(BaseModel):
-    """动作指令 Agent 的结构化输出。"""
+    """单个原子动作步骤的结构化输出（同时作为 DecomposePlan 的步骤类型）。"""
 
     action_type: str  # 动作类型，如 抓取、放置、递给用户
     target_object: str  # 目标物体
     params: dict[str, Any] = {}  # 其他动作参数
     reply: str  # 给用户的确认回复
+
+
+class DecomposePlan(BaseModel):
+    """复杂动作分解 Agent 的结构化输出：有序原子步骤序列。"""
+
+    steps: list[ActionPlan]  # 按执行先后顺序排列的原子步骤
+    reply: str  # 给用户的整体确认回复
 
 
 class SystemPlan(BaseModel):
@@ -88,36 +95,46 @@ class ChatAgent(BaseAgent):
     """
 
 
-class ActionAgent(BaseAgent):
-    """动作指令 Agent：解析出结构化的机械臂任务。"""
+class DecomposeAgent(BaseAgent):
+    """动作分解 Agent：把用户指令拆成有序的原子抓取/放置步骤。"""
 
-    name = "action"
+    name = "decompose"
     model = "qwen-flash"
     system_prompt = """
     #身份
-    你是智能机械臂系统的动作规划智能体。
+    你是智能机械臂系统的动作分解规划智能体。
     #指令
-    用户会给出想让机械臂执行的动作指令，请解析出结构化任务：
-    - action_type: 动作类型，例如 抓取、放置、移动、递给用户
-    - target_object: 目标物体名称
-    - params: 其他动作参数（如位置、方向等），没有则留空字典
-    - reply: 用一句简短的中文向用户确认即将执行的任务
+    用户会给出想让机械臂执行的动作指令，可能包含多个连续动作（例如"先把苹果拿过来，再把杯子放到桌上"）。
+    请把指令拆解为按执行先后顺序排列的原子步骤，每一步都是单次"抓取/放置"级别的动作：
+    - steps: 有序步骤列表，每步包含：
+        - action_type: 动作类型，如 抓取、放置、移动、递给用户
+        - target_object: 该步要操作的单个物体名称
+        - params: 其他动作参数（如位置、方向等），没有则留空字典
+        - reply: 用一句简短中文描述这一步的动作
+    - reply: 用一句简短中文向用户确认即将依次执行的整个任务
+    注意：只包含单个动作的指令也要返回仅含一个 step 的 steps 列表。
     """
 
     def run(self, user_text: str, history: list[dict]) -> dict:
-        plan: ActionPlan = self.recognizer.agentCommunication(
+        plan: DecomposePlan = self.recognizer.agentCommunication(
             self.model,
             self.system_prompt,
             self._build_user_info(user_text, history),
-            responseForm=ActionPlan,
+            responseForm=DecomposePlan,
         )
         return {
             "message": plan.reply,
             "task": {
-                "type": "action",
-                "action_type": plan.action_type,
-                "target_object": plan.target_object,
-                "params": plan.params,
+                "type": "plan",
+                "steps": [
+                    {
+                        "action_type": s.action_type,
+                        "target_object": s.target_object,
+                        "params": s.params,
+                        "reply": s.reply,
+                    }
+                    for s in plan.steps
+                ],
             },
         }
 

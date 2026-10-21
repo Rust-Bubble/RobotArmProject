@@ -9,14 +9,15 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Any, AsyncIterator
 
 from src.qiming.mllm.recognizer import MllmRecognizer
 from src.qiming.arm_control.status import status_hub
 from src.qiming.orchestrator.agents import (
-    ActionAgent,
     BaseAgent,
     ChatAgent,
+    DecomposeAgent,
     SystemAgent,
 )
 from src.qiming.tools.registry import ToolRegistry
@@ -25,7 +26,7 @@ from src.qiming.tools.builtin import create_default_registry
 # 意图识别可返回的类型 -> 对应子 Agent
 AGENT_MAP = {
     "闲聊": ChatAgent,
-    "动作指令": ActionAgent,
+    "动作指令": DecomposeAgent,
     "系统指令": SystemAgent,
 }
 
@@ -56,6 +57,7 @@ class Orchestrator:
             status       进度提示        {stage, message}
             intent       意图识别结果    {intent, agent}
             agent_start  子 Agent 开始   {agent}
+            step         分解步骤开始    {index, total, action_type, target_object, message}
             robot_status 机械臂状态更新  {state, phase, driver, target, updated_at}
             tool_result  工具执行结果    {tool, ok, result|error}
             agent_result 子 Agent 结束   {agent, message, task}
@@ -88,16 +90,31 @@ class Orchestrator:
             yield {"type": "done"}
             return
 
-        # 子 Agent 产出结构化任务时，分发到对应的外部系统工具
-        tool_result = None
-        tool_call = self._tool_call_for_task(result["task"])
-        if tool_call is not None:
-            tool_name, tool_args = tool_call
+        # 子 Agent 产出结构化任务时，按步骤依次分发到对应的外部系统工具
+        task = result["task"]
+        tool_calls = self._tool_calls_for_task(task)
+        is_plan = bool(task and task.get("type") == "plan")
+        steps = task.get("steps", []) if is_plan else []
+
+        tool_results: list[dict] = []
+        for idx, (tool_name, tool_args) in enumerate(tool_calls, start=1):
+            if is_plan:
+                step = steps[idx - 1] if idx - 1 < len(steps) else {}
+                yield {
+                    "type": "step",
+                    "index": idx,
+                    "total": len(tool_calls),
+                    "action_type": step.get("action_type", ""),
+                    "target_object": step.get("target_object", ""),
+                    "message": step.get("reply", ""),
+                }
             holder: dict[str, Any] = {}
             async for event in self._run_tool_streaming(tool_name, tool_args, holder):
                 yield event
-            tool_result = holder["result"]
-            yield {"type": "tool_result", "tool": tool_name, **tool_result}
+            tool_results.append(holder["result"])
+            yield {"type": "tool_result", "tool": tool_name, **holder["result"]}
+
+        tool_result = tool_results if is_plan else (tool_results[0] if tool_results else None)
 
         self.history.append({"role": "user", "text": user_text})
         self.history.append({"role": "agent", "text": result["message"]})
@@ -150,37 +167,53 @@ class Orchestrator:
         # 模型偶尔会带引号/空白，做一次清洗
         return str(intent).strip().strip("\"'“”")
 
-    @staticmethod
-    def _tool_call_for_task(task: dict[str, Any] | None) -> tuple[str, dict] | None:
-        """把子 Agent 产出的结构化任务映射为工具调用 (name, args)。
+    _ACTION_TOOL_KEYWORDS = ("抓", "拿", "递", "取", "放", "置", "移")
 
-        没有对应工具（如闲聊）时返回 None。
+    @staticmethod
+    def _action_to_tool_call(action: dict[str, Any]) -> tuple[str, dict] | None:
+        """把单个原子动作步骤映射为工具调用 (name, args)，无对应工具时返回 None。"""
+        action_type = str(action.get("action_type", ""))
+        if any(k in action_type for k in Orchestrator._ACTION_TOOL_KEYWORDS):
+            params = action.get("params") or {}
+            args: dict[str, Any] = {"object_name": str(action.get("target_object", "物体"))}
+            if "x" in params:
+                args["x"] = params["x"]
+            if "y" in params:
+                args["y"] = params["y"]
+            return "execute_grasp", args
+        return None
+
+    @staticmethod
+    def _system_to_tool_call(task: dict[str, Any]) -> tuple[str, dict] | None:
+        """把系统指令任务映射为工具调用 (name, args)，无对应工具时返回 None。"""
+        command = str(task.get("command", ""))
+        if "状态" in command:
+            return "query_robot_status", {}
+        if "停" in command:
+            return "emergency_stop", {}
+        if "复位" in command or "重启" in command:
+            return "reset_system", {}
+        return None
+
+    @classmethod
+    def _tool_calls_for_task(cls, task: dict[str, Any] | None) -> list[tuple[str, dict]]:
+        """把子 Agent 产出的结构化任务映射为一组工具调用 [(name, args), ...]。
+
+        plan 任务按步骤展开；单步 action / system 任务退化为单元素列表；
+        没有对应工具（如闲聊）时返回空列表。
         """
         if not task:
-            return None
+            return []
+        if task.get("type") == "plan":
+            return [call for step in (task.get("steps") or [])
+                    if (call := cls._action_to_tool_call(step))]
         if task.get("type") == "action":
-            action_type = str(task.get("action_type", ""))
-            if any(k in action_type for k in ("抓", "拿", "递", "取")):
-                params = task.get("params") or {}
-                args: dict[str, Any] = {
-                    "object_name": str(task.get("target_object", "物体"))
-                }
-                if "x" in params:
-                    args["x"] = params["x"]
-                if "y" in params:
-                    args["y"] = params["y"]
-                return "execute_grasp", args
-            return None
+            call = cls._action_to_tool_call(task)
+            return [call] if call else []
         if task.get("type") == "system":
-            command = str(task.get("command", ""))
-            if "状态" in command:
-                return "query_robot_status", {}
-            if "停" in command:
-                return "emergency_stop", {}
-            if "复位" in command or "重启" in command:
-                return "reset_system", {}
-            return None
-        return None
+            call = cls._system_to_tool_call(task)
+            return [call] if call else []
+        return []
 
 
 class MockOrchestrator(Orchestrator):
@@ -209,8 +242,9 @@ class MockOrchestrator(Orchestrator):
         yield {"type": "agent_start", "agent": agent.name}
 
         if intent == "动作指令":
-            message = f"好的，准备执行动作：{user_text}（mock）"
-            task = {"type": "action", "action_type": "抓取", "target_object": user_text, "params": {}}
+            steps = self._mock_decompose(user_text)
+            message = f"好的，准备依次执行 {len(steps)} 个动作（mock）"
+            task = {"type": "plan", "steps": steps}
         elif intent == "系统指令":
             message = f"系统指令已收到：{user_text}（mock，尚未接入硬件）"
             task = {"type": "system", "command": user_text}
@@ -219,15 +253,29 @@ class MockOrchestrator(Orchestrator):
             task = None
 
         # mock 调度器同样走工具分发，保证全链路可联调
-        tool_result = None
-        tool_call = self._tool_call_for_task(task)
-        if tool_call is not None:
-            tool_name, tool_args = tool_call
+        tool_calls = self._tool_calls_for_task(task)
+        is_plan = bool(task and task.get("type") == "plan")
+        steps = task.get("steps", []) if is_plan else []
+
+        tool_results: list[dict] = []
+        for idx, (tool_name, tool_args) in enumerate(tool_calls, start=1):
+            if is_plan:
+                step = steps[idx - 1] if idx - 1 < len(steps) else {}
+                yield {
+                    "type": "step",
+                    "index": idx,
+                    "total": len(tool_calls),
+                    "action_type": step.get("action_type", ""),
+                    "target_object": step.get("target_object", ""),
+                    "message": step.get("reply", ""),
+                }
             holder: dict[str, Any] = {}
             async for event in self._run_tool_streaming(tool_name, tool_args, holder):
                 yield event
-            tool_result = holder["result"]
-            yield {"type": "tool_result", "tool": tool_name, **tool_result}
+            tool_results.append(holder["result"])
+            yield {"type": "tool_result", "tool": tool_name, **holder["result"]}
+
+        tool_result = tool_results if is_plan else (tool_results[0] if tool_results else None)
 
         self.history.append({"role": "user", "text": user_text})
         self.history.append({"role": "agent", "text": message})
@@ -239,6 +287,23 @@ class MockOrchestrator(Orchestrator):
             "tool_result": tool_result,
         }
         yield {"type": "done"}
+
+    @staticmethod
+    def _mock_decompose(user_text: str) -> list[dict]:
+        """mock 版动作拆解：按标点/连接词切分子句，每子句一个原子步骤。"""
+        clauses = [c.strip() for c in re.split(r"[，,。；;、]|然后|再", user_text) if c.strip()]
+        steps = [
+            {
+                "action_type": "抓取" if any(k in c for k in ("拿", "抓", "取", "递", "给")) else "放置",
+                "target_object": c,
+                "params": {},
+                "reply": f"执行：{c}",
+            }
+            for c in clauses
+        ]
+        if not steps:
+            steps = [{"action_type": "抓取", "target_object": user_text, "params": {}, "reply": f"执行：{user_text}"}]
+        return steps
 
     def _recognize_intent(self, user_text: str) -> str:  # pragma: no cover
         raise NotImplementedError("MockOrchestrator 不使用 MLLM 意图识别")
