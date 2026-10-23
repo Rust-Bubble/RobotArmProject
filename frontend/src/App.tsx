@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AudioLines,
   Bot,
-  ChevronLeft,
   CircleStop,
   Cpu,
   LogOut,
@@ -15,6 +14,8 @@ import {
 import {
   ChatClient,
   type ChatEvent,
+  type HistoryEvent,
+  type RobotStatusEvent,
   type ToolResultEvent,
 } from "./api/chatClient";
 import {
@@ -45,8 +46,55 @@ interface TaskInfo {
 
 const EMPTY_TASK: TaskInfo = { intent: "—", target: "—", params: "—" };
 
+/** 机械臂工作状态（后端 arm_control/status.py 的 RobotStatusHub 快照） */
+interface RobotStatus {
+  state: string; // idle / busy / estop
+  phase: string;
+  driver: string;
+  target: string;
+  updated_at: string;
+}
+
+const EMPTY_ROBOT: RobotStatus = {
+  state: "idle",
+  phase: "待机中",
+  driver: "-",
+  target: "",
+  updated_at: "",
+};
+
+const ROBOT_STATE_LABELS: Record<string, string> = {
+  idle: "空闲",
+  busy: "执行中",
+  estop: "已急停",
+};
+
 let messageSeq = 0;
 const nextId = () => ++messageSeq;
+
+// ---------- 浏览器语音识别（Web Speech API）最小类型声明 ----------
+interface SpeechRecognitionResultLike {
+  transcript: string;
+}
+interface SpeechRecognitionEventLike {
+  results: ArrayLike<ArrayLike<SpeechRecognitionResultLike>>;
+}
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((e: unknown) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+const getSpeechRecognition = (): SpeechRecognitionCtor | null =>
+  (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor })
+    .SpeechRecognition ??
+  (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition ??
+  null;
 
 export default function App() {
   const token = getStoredToken();
@@ -66,14 +114,29 @@ export default function App() {
   const [wsConnected, setWsConnected] = useState(false);
   const [task, setTask] = useState<TaskInfo>(EMPTY_TASK);
   const [events, setEvents] = useState<EventRow[]>([]);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [robot, setRobot] = useState<RobotStatus>(EMPTY_ROBOT);
 
   const clientRef = useRef<ChatClient | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const [listening, setListening] = useState(false);
 
   // ---------- WebSocket 事件处理 ----------
   const handleEvent = useCallback((event: ChatEvent) => {
     switch (event.type) {
+      case "history": {
+        // 连接建立 / 新建会话时后端推来的会话历史（MemoryManager 持久化恢复）
+        const historyEvent = event as HistoryEvent;
+        setMessages(
+          (historyEvent.messages ?? []).map((m) => ({
+            id: nextId(),
+            role: m.role,
+            text: m.text,
+            meta: m.agent ? `${m.agent} agent` : "历史消息",
+          })),
+        );
+        break;
+      }
       case "intent":
         setTask((prev) => ({ ...prev, intent: event.intent ?? "—" }));
         setEvents((prev) => [
@@ -120,6 +183,17 @@ export default function App() {
             cls: toolEvent.ok ? "complete" : "error",
           },
         ]);
+        break;
+      }
+      case "robot_status": {
+        const statusEvent = event as RobotStatusEvent;
+        setRobot({
+          state: statusEvent.state ?? "idle",
+          phase: statusEvent.phase ?? "",
+          driver: statusEvent.driver ?? "-",
+          target: statusEvent.target ?? "",
+          updated_at: statusEvent.updated_at ?? "",
+        });
         break;
       }
       case "error":
@@ -194,6 +268,7 @@ export default function App() {
       setMessages([]);
       setEvents([]);
       setTask(EMPTY_TASK);
+      setRobot(EMPTY_ROBOT);
       setAuthed(true);
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : "操作失败");
@@ -209,32 +284,69 @@ export default function App() {
     setMessages([]);
     setEvents([]);
     setTask(EMPTY_TASK);
+    setRobot(EMPTY_ROBOT);
     setWsConnected(false);
   };
 
   // ---------- 发送文本 ----------
-  const sendText = () => {
-    const content = input.trim();
-    if (!content || waiting || !clientRef.current?.ready) return;
-    setInput("");
+  const sendMessage = (content: string, meta: string) => {
+    const text = content.trim();
+    if (!text || waiting || !clientRef.current?.ready) return;
     setNotice("");
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", text: content, meta: "文本输入" }]);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", text, meta }]);
     setEvents([]);
     setWaiting(true);
-    clientRef.current.sendText(content);
+    clientRef.current.sendText(text);
   };
 
+  const sendText = () => sendMessage(input, "文本输入");
+
   const resetSession = () => {
-    setMessages([]);
+    // 通知后端新建会话（服务端会回推一条空的 history），本地状态随之清空
+    clientRef.current?.newSession();
     setEvents([]);
     setTask(EMPTY_TASK);
     setWaiting(false);
     setNotice("");
   };
 
-  // ---------- 麦克风（STT 未接入，保留按钮占位） ----------
-  const onMicClick = () => {
-    setNotice("语音识别（STT）尚未接入，请先用文本输入与 Agent 对话。");
+  // ---------- 麦克风（浏览器语音识别 -> 文本 -> WebSocket） ----------
+  const toggleMic = () => {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const SRClass = getSpeechRecognition();
+    if (!SRClass) {
+      setNotice("当前浏览器不支持语音识别（推荐使用 Chrome / Edge），请先用文本输入。");
+      return;
+    }
+    if (!wsConnected || waiting) {
+      setNotice(waiting ? "上一条消息还在处理中，请稍候。" : "后端未连接，无法发送语音消息。");
+      return;
+    }
+    const recognition = new SRClass();
+    recognition.lang = "zh-CN";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (e) => {
+      const transcript = e.results?.[0]?.[0]?.transcript ?? "";
+      if (transcript.trim()) sendMessage(transcript.trim(), "语音输入");
+    };
+    recognition.onerror = () => {
+      setListening(false);
+      setNotice("语音识别失败，请重试或改用文本输入。");
+    };
+    recognition.onend = () => setListening(false);
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setListening(true);
+      setNotice("");
+    } catch {
+      setListening(false);
+      setNotice("麦克风启动失败，请检查浏览器麦克风权限。");
+    }
   };
 
   // ================= 登录视图 =================
@@ -343,209 +455,230 @@ export default function App() {
         </div>
       </header>
 
-      <section className="conversation-layout">
-        <div className="conversation-header">
-          <div>
-            <span>CONVERSATION</span>
-            <h1>与启明对话</h1>
-          </div>
-          <button type="button" onClick={resetSession}>
-            <RefreshCw size={15} />
-            新建会话
-          </button>
-        </div>
-
-        <div className="conversation-stream" aria-live="polite" ref={streamRef}>
-          {messages.length === 0 && !waiting && (
-            <div className="empty-conversation">
-              <span>
-                <AudioLines size={27} />
-              </span>
-              <h2>从一句话开始</h2>
-              <p>
-                试试输入"帮我拿桌上的水杯"（动作指令）、"你是谁"（闲聊）或"查询状态"（系统指令），
-                Orchestrator 会自动识别意图并分发给对应的 Agent。
-              </p>
+      <div className="workspace">
+        <section className="conversation-layout">
+          <div className="conversation-header">
+            <div>
+              <span>CONVERSATION</span>
+              <h1>与启明对话</h1>
             </div>
-          )}
+            <button type="button" onClick={resetSession}>
+              <RefreshCw size={15} />
+              新建会话
+            </button>
+          </div>
 
-          {messages.map((msg) => (
-            <div key={msg.id} className={`turn ${msg.role === "user" ? "user-turn" : "agent-turn"}`}>
-              <div className="turn-meta">
-                {msg.role === "user" ? (
-                  <span>你</span>
-                ) : (
+          <div className="conversation-stream" aria-live="polite" ref={streamRef}>
+            {messages.length === 0 && !waiting && (
+              <div className="empty-conversation">
+                <span>
+                  <AudioLines size={27} />
+                </span>
+                <h2>从一句话开始</h2>
+                <p>
+                  试试输入"帮我拿桌上的水杯"（动作指令）、"你是谁"（闲聊）或"查询状态"（系统指令），
+                  Orchestrator 会自动识别意图并分发给对应的 Agent。
+                </p>
+              </div>
+            )}
+
+            {messages.map((msg) => (
+              <div key={msg.id} className={`turn ${msg.role === "user" ? "user-turn" : "agent-turn"}`}>
+                <div className="turn-meta">
+                  {msg.role === "user" ? (
+                    <span>你</span>
+                  ) : (
+                    <span className="agent-name">
+                      <Bot size={14} />
+                      启明
+                    </span>
+                  )}
+                  <small>{msg.meta ?? ""}</small>
+                </div>
+                <div className="turn-content">
+                  <p>{msg.text}</p>
+                </div>
+              </div>
+            ))}
+
+            {waiting && (
+              <div className="turn agent-turn">
+                <div className="turn-meta">
                   <span className="agent-name">
                     <Bot size={14} />
                     启明
                   </span>
-                )}
-                <small>{msg.meta ?? ""}</small>
-              </div>
-              <div className="turn-content">
-                <p>{msg.text}</p>
-              </div>
-            </div>
-          ))}
-
-          {waiting && (
-            <div className="turn agent-turn">
-              <div className="turn-meta">
-                <span className="agent-name">
-                  <Bot size={14} />
-                  启明
-                </span>
-                <small>思考中</small>
-              </div>
-              <div className="turn-content">
-                <div className="listening-line">
-                  <span className="listening-dot" />
-                  Orchestrator 正在调度 Agent…
+                  <small>思考中</small>
+                </div>
+                <div className="turn-content">
+                  <div className="listening-line">
+                    <span className="listening-dot" />
+                    Orchestrator 正在调度 Agent…
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        <div className="text-composer">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") sendText();
-            }}
-            placeholder={wsConnected ? "输入消息，回车发送…" : "后端未连接，无法发送"}
-            disabled={!wsConnected}
-          />
-          <button
-            type="button"
-            onClick={sendText}
-            disabled={!wsConnected || waiting || !input.trim()}
-            aria-label="发送"
-          >
-            <Send size={16} />
-          </button>
-          <button type="button" className="mic-button small" onClick={onMicClick} aria-label="语音输入">
-            <Mic size={18} />
-          </button>
-        </div>
-
-        {notice && (
-          <p className="permission-notice" role="status">
-            {notice}
-          </p>
-        )}
-
-        <footer className="interface-note">
-          <span>STT · 未接入</span>
-          <span>{wsConnected ? "Agent · 已连接" : "Agent · 未连接"}</span>
-          <span>
-            <Volume2 size={12} />
-            TTS · 未接入
-          </span>
-        </footer>
-      </section>
-
-      <aside
-        className={`control-drawer ${drawerOpen ? "open" : ""}`}
-        onMouseEnter={() => setDrawerOpen(true)}
-        onMouseLeave={() => setDrawerOpen(false)}
-      >
-        <button
-          type="button"
-          className="drawer-handle"
-          onClick={() => setDrawerOpen((value) => !value)}
-          onFocus={() => setDrawerOpen(true)}
-          aria-expanded={drawerOpen}
-          aria-controls="agent-console"
-        >
-          <ChevronLeft size={17} />
-          <span>控制台</span>
-        </button>
-
-        <div className="drawer-content" id="agent-console">
-          <div className="drawer-title">
-            <span>AGENT CONSOLE</span>
-            <h2>任务控制台</h2>
+            )}
           </div>
 
-          <section className="console-section">
-            <div className="section-label">
-              <span>当前任务</span>
-              <small>{waiting ? "执行中" : messages.length > 0 ? "空闲" : "暂无"}</small>
-            </div>
-            <dl className="task-fields">
-              <div>
-                <dt>意图</dt>
-                <dd>{task.intent}</dd>
-              </div>
-              <div>
-                <dt>目标</dt>
-                <dd>{task.target}</dd>
-              </div>
-              <div>
-                <dt>动作参数</dt>
-                <dd>{task.params}</dd>
-              </div>
-            </dl>
-            <p className="empty-task">
-              {messages.length === 0
-                ? "收到有效的 Agent 输出后，这里将展示结构化任务。"
-                : waiting
-                  ? "Orchestrator 正在识别意图并分发任务。"
-                  : "上一轮任务已结束，等待新的指令。"}
-            </p>
-          </section>
+          <div className="text-composer">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") sendText();
+              }}
+              placeholder={wsConnected ? "输入消息，回车发送…" : "后端未连接，无法发送"}
+              disabled={!wsConnected}
+            />
+            <button
+              type="button"
+              onClick={sendText}
+              disabled={!wsConnected || waiting || !input.trim()}
+              aria-label="发送"
+            >
+              <Send size={16} />
+            </button>
+            <button
+              type="button"
+              className={`mic-button small${listening ? " listening" : ""}`}
+              onClick={toggleMic}
+              aria-label={listening ? "停止语音输入" : "语音输入"}
+            >
+              <Mic size={18} />
+            </button>
+          </div>
 
-          <section className="console-section">
-            <div className="section-label">
-              <span>执行事件</span>
-              <small>实时</small>
+          {notice && (
+            <p className="permission-notice" role="status">
+              {notice}
+            </p>
+          )}
+
+          <footer className="interface-note">
+            <span>STT · 浏览器语音识别</span>
+            <span>{wsConnected ? "Agent · 已连接" : "Agent · 未连接"}</span>
+            <span>
+              <Volume2 size={12} />
+              TTS · 未接入
+            </span>
+          </footer>
+        </section>
+
+        <aside className="control-panel" aria-label="任务控制台">
+          <div className="panel-content" id="agent-console">
+            <div className="panel-title">
+              <span>AGENT CONSOLE</span>
+              <h2>任务控制台</h2>
             </div>
-            <div className="event-stream">
-              {events.length === 0 ? (
+
+            <section className="console-section">
+              <div className="section-label">
+                <span>当前任务</span>
+                <small>{waiting ? "执行中" : messages.length > 0 ? "空闲" : "暂无"}</small>
+              </div>
+              <dl className="task-fields">
                 <div>
-                  <i />
-                  <span>
-                    <strong>等待用户输入</strong>
-                    <small>当前状态</small>
-                  </span>
+                  <dt>意图</dt>
+                  <dd>{task.intent}</dd>
                 </div>
-              ) : (
-                events.map((ev, idx) => (
-                  <div key={idx} className={ev.cls}>
+                <div>
+                  <dt>目标</dt>
+                  <dd>{task.target}</dd>
+                </div>
+                <div>
+                  <dt>动作参数</dt>
+                  <dd>{task.params}</dd>
+                </div>
+              </dl>
+              <p className="empty-task">
+                {messages.length === 0
+                  ? "收到有效的 Agent 输出后，这里将展示结构化任务。"
+                  : waiting
+                    ? "Orchestrator 正在识别意图并分发任务。"
+                    : "上一轮任务已结束，等待新的指令。"}
+              </p>
+            </section>
+
+            <section className="console-section robot-card">
+              <div className="section-label">
+                <span>机械臂状态</span>
+                <small>{robot.updated_at || "—"}</small>
+              </div>
+
+              <div className={`robot-state ${robot.state}`}>
+                <i />
+                <strong>{ROBOT_STATE_LABELS[robot.state] ?? robot.state}</strong>
+                <small>
+                  {robot.state === "busy" ? "动作进行中" : robot.state === "estop" ? "等待复位" : "可接受指令"}
+                </small>
+              </div>
+
+              <dl className="task-fields">
+                <div>
+                  <dt>当前阶段</dt>
+                  <dd>{robot.phase || "—"}</dd>
+                </div>
+                <div>
+                  <dt>驱动模式</dt>
+                  <dd>{robot.driver || "—"}</dd>
+                </div>
+                <div>
+                  <dt>目标物体</dt>
+                  <dd>{robot.target || "—"}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section className="console-section">
+              <div className="section-label">
+                <span>执行事件</span>
+                <small>实时</small>
+              </div>
+              <div className="event-stream">
+                {events.length === 0 ? (
+                  <div>
                     <i />
                     <span>
-                      <strong>{ev.label}</strong>
-                      <small>{ev.sub}</small>
+                      <strong>等待用户输入</strong>
+                      <small>当前状态</small>
                     </span>
                   </div>
-                ))
-              )}
-            </div>
-          </section>
+                ) : (
+                  events.map((ev, idx) => (
+                    <div key={idx} className={ev.cls}>
+                      <i />
+                      <span>
+                        <strong>{ev.label}</strong>
+                        <small>{ev.sub}</small>
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
 
-          <section className="console-section devices">
-            <div className="section-label">
-              <span>服务状态</span>
-            </div>
-            <div>
-              <span>
-                <Cpu size={15} />
-                后端服务
-              </span>
-              <small>{wsConnected ? "WebSocket 已连接" : "未连接"}</small>
-            </div>
-            <div>
-              <span>
-                <Bot size={15} />
-                Orchestrator
-              </span>
-              <small>{wsConnected ? "就绪" : "不可用"}</small>
-            </div>
-          </section>
-        </div>
-      </aside>
+            <section className="console-section devices">
+              <div className="section-label">
+                <span>服务状态</span>
+              </div>
+              <div>
+                <span>
+                  <Cpu size={15} />
+                  后端服务
+                </span>
+                <small>{wsConnected ? "WebSocket 已连接" : "未连接"}</small>
+              </div>
+              <div>
+                <span>
+                  <Bot size={15} />
+                  Orchestrator
+                </span>
+                <small>{wsConnected ? "就绪" : "不可用"}</small>
+              </div>
+            </section>
+          </div>
+        </aside>
+      </div>
     </main>
   );
 }

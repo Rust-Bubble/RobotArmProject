@@ -43,7 +43,7 @@ a:focus-visible {
 .app-shell {
   min-height: 100vh;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
   background:
     linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.3)),
     #eeece6;
@@ -127,13 +127,20 @@ a:focus-visible {
   cursor: pointer;
 }
 
-.conversation-layout {
-  width: min(960px, calc(100% - 90px));
-  min-height: calc(100vh - 70px);
-  margin: 0 auto;
-  padding: 42px 0 24px;
+.workspace {
+  height: calc(100vh - 70px);
   display: grid;
-  grid-template-rows: auto minmax(300px, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 430px);
+}
+
+.conversation-layout {
+  width: min(760px, 100%);
+  height: 100%;
+  margin: 0 auto;
+  padding: 42px 46px 24px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  overflow: hidden;
 }
 
 .conversation-header {
@@ -145,7 +152,7 @@ a:focus-visible {
 }
 
 .conversation-header > div > span,
-.drawer-title > span {
+.panel-title > span {
   color: var(--orange);
   font-size: 9px;
   font-weight: 700;
@@ -337,6 +344,22 @@ a:focus-visible {
   transform: translateY(-2px);
 }
 
+/* 语音识别进行中：呼吸灯提示 */
+.mic-button.listening {
+  background: #c0392b;
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(192, 57, 43, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(192, 57, 43, 0);
+  }
+}
+
 .stop-square {
   width: 16px;
   height: 16px;
@@ -366,57 +389,21 @@ a:focus-visible {
   gap: 4px;
 }
 
-.control-drawer {
-  width: min(410px, calc(100vw - 34px));
-  height: calc(100vh - 70px);
-  position: fixed;
-  top: 70px;
-  right: 0;
-  z-index: 10;
+.control-panel {
+  height: 100%;
   color: white;
   background: rgba(31, 32, 29, 0.98);
-  transform: translateX(calc(100% - 23px));
-  transition: transform 0.38s cubic-bezier(0.22, 0.85, 0.28, 1);
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
 }
 
-.control-drawer.open,
-.control-drawer:focus-within {
-  transform: translateX(0);
-  box-shadow: -18px 0 45px rgba(31, 32, 29, 0.13);
-}
-
-.drawer-handle {
-  width: 23px;
-  height: 132px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  position: absolute;
-  top: 50%;
-  left: 0;
-  color: #d4d3ce;
-  background: transparent;
-  border: 0;
-  border-left: 2px solid var(--orange);
-  cursor: pointer;
-}
-
-.drawer-handle span {
-  font-size: 9px;
-  letter-spacing: 0.08em;
-  writing-mode: vertical-rl;
-}
-
-.drawer-content {
+.panel-content {
   height: 100%;
-  padding: 44px 34px 28px 55px;
+  padding: 44px 34px 28px;
   overflow-y: auto;
 }
 
-.drawer-title h2 {
+.panel-title h2 {
   margin: 8px 0 0;
   font-size: 25px;
   font-weight: 500;
@@ -472,6 +459,53 @@ a:focus-visible {
   color: #91928c;
   font-size: 9px;
   line-height: 1.65;
+}
+
+/* ========== 机械臂状态卡片 ========== */
+.robot-state {
+  margin-top: 17px;
+  min-height: 44px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.robot-state i {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 50%;
+  background: #8db45c;
+  box-shadow: 0 0 0 4px rgba(141, 180, 92, 0.12);
+}
+
+.robot-state strong {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.robot-state small {
+  margin-left: auto;
+  color: #80817c;
+  font-size: 8px;
+}
+
+.robot-state.busy i {
+  background: var(--orange);
+  box-shadow: 0 0 0 4px rgba(237, 92, 43, 0.14);
+  animation: blink 1.1s ease-in-out infinite;
+}
+
+.robot-state.estop i {
+  background: #d9534f;
+  box-shadow: 0 0 0 4px rgba(217, 83, 79, 0.16);
+}
+
+.robot-card .task-fields {
+  margin-top: 13px;
 }
 
 .event-stream {
@@ -731,6 +765,36 @@ a:focus-visible {
   background: #c0392b;
 }
 
+@media (max-width: 980px) {
+  .workspace {
+    height: auto;
+    min-height: calc(100vh - 70px);
+    grid-template-columns: 1fr;
+  }
+
+  .conversation-layout {
+    width: 100%;
+    height: auto;
+    min-height: 62vh;
+    overflow: visible;
+  }
+
+  .conversation-stream {
+    overflow-y: visible;
+  }
+
+  .control-panel {
+    height: auto;
+    border-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .panel-content {
+    height: auto;
+    padding: 40px 34px;
+  }
+}
+
 @media (max-width: 700px) {
   .topbar {
     height: 64px;
@@ -747,10 +811,12 @@ a:focus-visible {
     font-size: 0;
   }
 
-  .conversation-layout {
-    width: calc(100% - 44px);
+  .workspace {
     min-height: calc(100vh - 64px);
-    padding-top: 30px;
+  }
+
+  .conversation-layout {
+    padding: 30px 22px 24px;
   }
 
   .turn {
@@ -765,9 +831,8 @@ a:focus-visible {
     display: none;
   }
 
-  .control-drawer {
-    top: 64px;
-    height: calc(100vh - 64px);
+  .panel-content {
+    padding: 32px 22px;
   }
 }
 

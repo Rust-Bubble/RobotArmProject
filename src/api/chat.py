@@ -5,10 +5,13 @@
 消息协议（均为 JSON）：
 
 前端 -> 后端:
-    {"type": "text", "content": "帮我拿水杯"}   # 用户文本输入
+    {"type": "text", "content": "帮我拿水杯"}   # 用户文本输入（语音识别结果走同一条消息）
+    {"type": "new_session"}                     # 新建会话（清空上下文重新开始）
     {"type": "ping"}
 
 后端 -> 前端 (事件流，见 Orchestrator.handle):
+    {"type": "history",      "session_id": "...", "messages": [{role, text, agent}, ...]}
+    {"type": "robot_status", "state": "busy", "phase": "...", ...}
     {"type": "status",       "stage": "...", "message": "..."}
     {"type": "intent",       "intent": "动作指令", "agent": "action"}
     {"type": "agent_start",  "agent": "action"}
@@ -17,16 +20,25 @@
     {"type": "error",        "message": "..."}
     {"type": "done"}
     {"type": "pong"}
+
+连接建立后会先推送一条 robot_status 快照和一条 history 消息（由全局上下文
+管理器 MemoryManager 从数据库恢复该用户最近的会话），供前端初始化。
 """
+
+import logging
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
 from src.api.auth_utils import decode_token
+from src.qiming.arm_control.status import status_hub
 from src.qiming.database.connection import db_manager
 from src.qiming.database.models import User
+from src.qiming.memory.manager import SessionMemory, memory_manager
 from src.qiming.orchestrator.orchestrator import MockOrchestrator, Orchestrator
 from src.qiming.utils.config import load_yaml
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat"])
 
@@ -56,6 +68,13 @@ async def _authenticate(token: str) -> User | None:
         return result.scalars().first()
 
 
+async def _push_history(websocket: WebSocket, memory: SessionMemory) -> None:
+    """把会话历史推给前端，供其恢复对话界面。"""
+    await websocket.send_json(
+        {"type": "history", "session_id": memory.session_id, "messages": memory.to_payload()}
+    )
+
+
 @router.websocket("/ws/chat")
 async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
     user = await _authenticate(token)
@@ -65,8 +84,16 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
         return
 
     await websocket.accept()
-    # 每个连接一个独立会话（独立对话历史）
+    # 每个连接一个独立调度器，但对话历史挂在全局上下文管理器的会话上：
+    # 重连 / 服务重启后历史都能从数据库恢复
     orchestrator = _build_orchestrator()
+    memory = await memory_manager.get_session(user.id)
+    orchestrator.history = memory.history
+
+    # 先推一条机械臂状态快照，让前端状态卡片在连接建立时就有内容
+    await websocket.send_json({"type": "robot_status", **status_hub.snapshot()})
+    # 再推一条会话历史，让前端恢复之前的对话
+    await _push_history(websocket, memory)
 
     try:
         while True:
@@ -76,6 +103,13 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
                 await websocket.send_json({"type": "pong"})
                 continue
 
+            if data.get("type") == "new_session":
+                # 新建会话：清空上下文重新开始（旧会话记录保留在数据库中）
+                memory = await memory_manager.reset_session(user.id)
+                orchestrator.history = memory.history
+                await _push_history(websocket, memory)
+                continue
+
             if data.get("type") != "text":
                 continue
 
@@ -83,7 +117,19 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
             if not content:
                 continue
 
+            reply, agent_name = "", ""
             async for event in orchestrator.handle(content):
+                if event.get("type") == "agent_result":
+                    reply = str(event.get("message") or "")
+                    agent_name = str(event.get("agent") or "")
+                if event.get("type") == "done" and reply:
+                    # 在发送 done 之前先落库：保证前端收到"本轮结束"时
+                    # 上下文已持久化，即使它随即断开（如刷新页面）也不会丢这一轮
+                    try:
+                        await memory_manager.record_turn(
+                            memory.session_id, content, reply, agent_name or None)
+                    except Exception:  # noqa: BLE001
+                        logger.exception("会话 %s 持久化对话失败", memory.session_id)
                 await websocket.send_json(event)
     except WebSocketDisconnect:
         pass

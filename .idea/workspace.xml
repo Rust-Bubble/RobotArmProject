@@ -4,11 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="34536e7d-9a33-4149-b4ea-1898fafd0795" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/qiming/mllm/recognizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/qiming/mllm/recognizer.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/uv.lock" beforeDir="false" afterPath="$PROJECT_DIR$/uv.lock" afterDir="false" />
-    </list>
+    <list default="true" id="34536e7d-9a33-4149-b4ea-1898fafd0795" name="更改" comment="动作分解" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -24,6 +20,18 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;Rust-Bubble&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/Rust-Bubble/RobotArmProject.git&quot;,
+    &quot;accountId&quot;: &quot;632fb61d-254b-4347-b98c-0f0bef074d98&quot;
+  }
+}</component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 6,
   &quot;fromUser&quot;: false
@@ -36,13 +44,14 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python 测试.Python 测试 (test_orchestrator.py 内).executor": "Run",
     "Python.python -m src.main --text \"帮我拿桌上的水杯\".executor": "Run",
     "Python.recognizer.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
-    "git-widget-placeholder": "czc",
+    "git-widget-placeholder": "develop",
     "last_opened_file_path": "D:/code/RobotArmProject",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.jshint": "true",
@@ -50,10 +59,11 @@
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.jshint": "",
     "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm"
+    "nodejs_package_manager_path": "npm",
+    "python.packages.toolwindow.project.migrated.to.right.top.v2": "true"
   }
 }]]></component>
-  <component name="RunManager" selected="Python.recognizer">
+  <component name="RunManager" selected="Python 测试.Python 测试 (test_orchestrator.py 内)">
     <configuration name="python -m src.main --text &quot;帮我拿桌上的水杯&quot;" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <module name="qiming-smart-hand" />
       <option name="ENV_FILES" value="" />
@@ -102,8 +112,26 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="Python 测试 (test_orchestrator.py 内)" type="tests" factoryName="Autodetect" temporary="true" nameIsGenerated="true">
+      <module name="qiming-smart-hand" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <option name="RUN_TOOL" value="" />
+      <option name="_new_additionalArguments" value="&quot;&quot;" />
+      <option name="_new_target" value="&quot;$PROJECT_DIR$/tests/test_orchestrator.py&quot;" />
+      <option name="_new_targetType" value="&quot;PATH&quot;" />
+      <method v="2" />
+    </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python 测试.Python 测试 (test_orchestrator.py 内)" />
         <item itemvalue="Python.recognizer" />
         <item itemvalue="Python.python -m src.main --text &quot;帮我拿桌上的水杯&quot;" />
       </list>
@@ -112,7 +140,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-c6d794e1806d-5bd6d13a2a75-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-262.8665.309" />
+        <option value="bundled-python-sdk-73a66231627c-5bd6d13a2a75-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-262.10968.92" />
       </set>
     </attachedChunks>
   </component>
@@ -124,6 +152,47 @@
       <option name="presentableId" value="Default" />
       <updated>1784987938476</updated>
     </task>
+    <task id="LOCAL-00001" summary="意图识别完善">
+      <option name="closed" value="true" />
+      <created>1785931404220</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1785931404220</updated>
+    </task>
+    <task id="LOCAL-00002" summary="意图识别完善">
+      <option name="closed" value="true" />
+      <created>1792573349829</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1792573349829</updated>
+    </task>
+    <task id="LOCAL-00003" summary="动作分解">
+      <option name="closed" value="true" />
+      <created>1792573365416</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1792573365416</updated>
+    </task>
+    <task id="LOCAL-00004" summary="动作分解">
+      <option name="closed" value="true" />
+      <created>1792573431457</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1792573431457</updated>
+    </task>
+    <task id="LOCAL-00005" summary="动作分解">
+      <option name="closed" value="true" />
+      <created>1792573475589</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1792573475589</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -160,5 +229,10 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="意图识别完善" />
+    <MESSAGE value="动作分解" />
+    <option name="LAST_COMMIT_MESSAGE" value="动作分解" />
   </component>
 </project>

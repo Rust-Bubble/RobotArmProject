@@ -9,6 +9,29 @@ export interface ToolResultEvent {
   error?: string;
 }
 
+/** 机械臂状态事件：由 ArmController 逐步上报，见后端 arm_control/status.py */
+export interface RobotStatusEvent {
+  type: "robot_status";
+  state?: string; // idle / busy / estop
+  phase?: string;
+  driver?: string;
+  target?: string;
+  updated_at?: string;
+}
+
+/** 会话历史消息：由后端 MemoryManager 从数据库恢复（见 qiming/memory/manager.py） */
+export interface HistoryMessage {
+  role: "user" | "agent";
+  text: string;
+  agent?: string;
+}
+
+export interface HistoryEvent {
+  type: "history";
+  session_id?: string;
+  messages?: HistoryMessage[];
+}
+
 export type ChatEvent =
   | ({
       type: "status" | "intent" | "agent_start" | "agent_result" | "error" | "done" | "pong";
@@ -30,7 +53,9 @@ export type ChatEvent =
         command?: string;
       } | null;
     })
-  | ToolResultEvent;
+  | ToolResultEvent
+  | RobotStatusEvent
+  | HistoryEvent;
 
 export interface ChatClientHandlers {
   onOpen?: () => void;
@@ -77,6 +102,12 @@ export class ChatClient {
   ping(): void {
     if (!this.ready) return;
     this.ws?.send(JSON.stringify({ type: "ping" }));
+  }
+
+  /** 请求后端新建会话（清空上下文，旧会话记录保留在数据库） */
+  newSession(): void {
+    if (!this.ready) return;
+    this.ws?.send(JSON.stringify({ type: "new_session" }));
   }
 
   close(): void {

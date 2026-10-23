@@ -6,6 +6,7 @@ import numpy as np
 
 from pymycobot import MyCobot320, PI_PORT
 
+from src.qiming.arm_control.kinematics import ArmKinematics
 from src.qiming.models import Pose
 
 
@@ -17,6 +18,14 @@ class MyCobotDriver:
         self.default_speed = robot_cfg.get("default_speed", 35)
         self.gripper_config = robot_cfg.get("gripper", {})
         self.mc = None
+
+        # 逆运动学求解器：优先使用固件自带解算，无硬件时回退到本地算法
+        kinematics_cfg = robot_cfg.get("kinematics", {})
+        self.kinematics = ArmKinematics(
+            dh_params=kinematics_cfg.get("dh_params"),
+            joint_limits=kinematics_cfg.get("joint_limits"),
+        )
+
         self._connect()
 
     def _connect(self) -> None:
@@ -35,6 +44,67 @@ class MyCobotDriver:
         x, y, z, rx, ry, rz = pose
         self.mc.send_coords([x, y, z, rx, ry, rz], self.default_speed)
         time.sleep(2)
+
+    # ==================== 运动学: 位姿 <-> 关节角度 ====================
+    def get_angles(self) -> list:
+        """读取当前关节角度，未连接时返回零位。"""
+        if self.mc is not None:
+            try:
+                angles = self.mc.get_angles()
+                if angles and len(angles) == 6:
+                    return [float(v) for v in angles]
+            except Exception as e:
+                print(f"[机械臂] 读取关节角度失败: {e}")
+        return [0.0] * 6
+
+    def pose_to_joints(self, pose: Pose, current_angles: list = None) -> list:
+        """基坐标位姿 -> 关节角度。
+
+        已连接实机时优先使用固件自带逆解（与真实 DH 完全一致），
+        否则使用本地 ArmKinematics 数值求解；无解时返回 None。
+        """
+        if self.mc is not None:
+            try:
+                seed = current_angles or self.get_angles()
+                angles = self.mc.solve_inv_kinematics(list(pose), list(seed))
+                if angles and len(angles) == 6:
+                    return [float(v) for v in angles]
+            except Exception as e:
+                print(f"[机械臂] 固件逆解失败({e})，回退到本地算法")
+        joints = self.kinematics.pose_to_joints(list(pose), seed=current_angles)
+        if joints is None:
+            print(f"[机械臂] 位姿不可达: {pose}")
+        return joints
+
+    def joints_to_pose(self, joints: list = None) -> list:
+        """关节角度 -> 基坐标位姿；未指定时读取当前角度。"""
+        joints = joints if joints is not None else self.get_angles()
+        if self.mc is not None:
+            try:
+                coords = self.mc.angles_to_coords(list(joints))
+                if coords and len(coords) == 6:
+                    return [float(v) for v in coords]
+            except Exception as e:
+                print(f"[机械臂] 固件正解失败({e})，回退到本地算法")
+        return self.kinematics.joints_to_pose(joints)
+
+    def move_to_joints(self, joints: list, speed: int = None) -> None:
+        """按关节角度移动机械臂。"""
+        if self.mc is None:
+            print(f"[机械臂] 未连接，跳过关节移动: {[round(v, 2) for v in joints]}")
+            return
+        self.mc.send_angles(list(joints), speed or self.default_speed)
+        time.sleep(2)
+
+    def move_to_by_ik(self, pose: Pose, speed: int = None) -> bool:
+        """先做逆运动学转换，再以关节角度方式移动。"""
+        joints = self.pose_to_joints(pose)
+        if joints is None:
+            return False
+        print(f"[机械臂] IK 求解 {[round(v, 1) for v in pose]} -> "
+              f"关节角 {[round(v, 2) for v in joints]}")
+        self.move_to_joints(joints, speed)
+        return True
 
     def open_gripper(self) -> None:
         if self.mc is None:
@@ -259,29 +329,31 @@ class MyCobotDriver:
         A = T2 @ T1_inv
         return A
 
-    def transform_base_to_end(self, point_in_base: np.ndarray, T_BC: np.ndarray) -> np.ndarray:
-        """
-        基坐标系坐标转换到相机坐标系 (Eye-to-Hand模式)
-        
-        参数:
-            point_in_base: 4x1 齐次坐标 [X, Y, Z, 1]
-            T_BC: 相机在基坐标系下的外参 (4x4)
-            
-        返回:
-            相机坐标系下的4x1齐次坐标
-        """
-        return T_BC @ point_in_base
-
     def transform_camera_to_base(self, point_in_camera: np.ndarray, T_BC: np.ndarray) -> np.ndarray:
         """
         相机坐标系坐标转换到基坐标系 (Eye-to-Hand模式)
-        
+
+        T_BC 为「相机在基坐标系下的外参」，即把相机坐标映射到基坐标的变换。
+
         参数:
             point_in_camera: 4x1 齐次坐标 [X, Y, Z, 1]
             T_BC: 相机在基坐标系下的外参 (4x4)
-            
+
         返回:
             基坐标系下的4x1齐次坐标
         """
+        return T_BC @ point_in_camera
+
+    def transform_base_to_camera(self, point_in_base: np.ndarray, T_BC: np.ndarray) -> np.ndarray:
+        """
+        基坐标系坐标转换到相机坐标系 (Eye-to-Hand模式)
+
+        参数:
+            point_in_base: 4x1 齐次坐标 [X, Y, Z, 1]
+            T_BC: 相机在基坐标系下的外参 (4x4)
+
+        返回:
+            相机坐标系下的4x1齐次坐标
+        """
         T_BC_inv = np.linalg.inv(T_BC)
-        return T_BC_inv @ point_in_camera
+        return T_BC_inv @ point_in_base

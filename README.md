@@ -17,16 +17,21 @@ config/
 
 src/
   main.py           主流程入口
+  api/              FastAPI 服务（认证 + WebSocket 对话）
   qiming/
     speech/         语音输入与播报
     vision/         摄像头图像采集
     mllm/           MLLM 识别与动作决策
+    orchestrator/   多 Agent 调度器
+    memory/         全局上下文管理 (Memory) 与持久化存储
     arm_control/    机械臂控制
+    database/       数据库连接与模型
     models.py       核心数据结构
     utils/          配置与日志工具
 
 scripts/
   demo_text_command.py    文本模拟语音指令
+  stability_test.py       联调一：语音流转后端稳定性测试
 ```
 
 ## 当前运行方式
@@ -36,6 +41,23 @@ scripts/
 ```powershell
 python -m src.main --text "帮我拿桌上的水杯"
 ```
+
+## 运行后端并自测
+
+```powershell
+# 启动后端
+./robot-arm-env/Scripts/python.exe -m uvicorn src.api.app:app --port 8000
+
+# 另开终端，运行联调一稳定性测试（前端语音流 -> 后端处理）
+./robot-arm-env/Scripts/python.exe scripts/stability_test.py --rounds 20
+
+# 运行单元/集成测试
+./robot-arm-env/Scripts/python.exe -m pytest tests/
+```
+
+前端语音输入使用浏览器 Web Speech API（Chrome/Edge 可用），识别结果通过
+WebSocket 发给后端；对话上下文由 `src/qiming/memory/` 统一管理并持久化到
+数据库，断线重连、服务重启后自动恢复。详细说明见 `docs/memory_and_stability.md`。
 
 ## 后续开发重点
 

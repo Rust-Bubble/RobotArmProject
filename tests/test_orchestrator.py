@@ -8,6 +8,7 @@ import asyncio
 
 import pytest
 
+from src.qiming.orchestrator.agents import ActionPlan
 from src.qiming.orchestrator.orchestrator import MockOrchestrator, Orchestrator
 
 
@@ -31,7 +32,16 @@ class FakeRecognizer:
     def agentCommunication(self, model, system_prompt, userInfo, imageInfo=None, responseForm=None):
         self.last_response_form = responseForm
         if responseForm is not None:
-            if getattr(responseForm, "__name__", "") == "ActionPlan":
+            name = getattr(responseForm, "__name__", "")
+            if name == "DecomposePlan":
+                return responseForm(
+                    steps=[
+                        ActionPlan(action_type="抓取", target_object="苹果", params={}, reply="抓取苹果"),
+                        ActionPlan(action_type="放置", target_object="杯子", params={}, reply="放置杯子"),
+                    ],
+                    reply="好的，将依次执行这些动作",
+                )
+            if name == "ActionPlan":
                 return responseForm(
                     action_type="抓取",
                     target_object="水杯",
@@ -43,26 +53,36 @@ class FakeRecognizer:
 
 
 class TestMockOrchestrator:
-    def test_action_intent_routes_to_action_agent_and_tool(self):
+    def test_action_intent_routes_to_decompose_agent_and_tool(self):
         orch = MockOrchestrator()
         events = collect_events(orch, "帮我拿一下水杯")
 
-        types = [e["type"] for e in events]
+        # 动作执行期间会穿插 robot_status 事件（供前端机械臂状态卡片实时刷新），
+        # 这里校验其余事件仍保持原有顺序与内容。
+        types = [e["type"] for e in events if e["type"] != "robot_status"]
         assert types == [
             "status", "intent", "agent_start",
-            "tool_result", "agent_result", "done",
+            "step", "tool_result", "agent_result", "done",
         ]
         intent_event = events[1]
         assert intent_event["intent"] == "动作指令"
-        assert intent_event["agent"] == "action"
+        assert intent_event["agent"] == "decompose"
+
+        # 机械臂状态被逐步上报：动作执行中有 busy，动作结束后回到 idle
+        status_events = [e for e in events if e["type"] == "robot_status"]
+        assert status_events, "应上报机械臂状态"
+        assert any(e["state"] == "busy" for e in status_events)
+        assert status_events[-1]["state"] == "idle"
+        assert any(e.get("phase") == "闭合夹爪" for e in status_events)
 
         # 动作任务被分发到 execute_grasp 工具
-        tool_event = events[3]
+        tool_event = next(e for e in events if e["type"] == "tool_result")
         assert tool_event["tool"] == "execute_grasp"
         assert tool_event["ok"] is True
 
-        result = events[4]
-        assert result["task"]["type"] == "action"
+        result = next(e for e in events if e["type"] == "agent_result")
+        assert result["task"]["type"] == "plan"
+        assert len(result["task"]["steps"]) == 1
         # 历史被记录
         assert orch.history[-2]["role"] == "user"
 
@@ -96,6 +116,26 @@ class TestMockOrchestrator:
         collect_events(orch, "你好")
         collect_events(orch, "再次你好")
         assert len(orch.history) == 4
+
+    def test_compound_action_decomposes_into_multiple_steps(self):
+        orch = MockOrchestrator()
+        events = collect_events(orch, "先把苹果拿过来，再把杯子放到桌上")
+
+        steps = [e for e in events if e["type"] == "step"]
+        assert len(steps) == 2
+        assert steps[0]["index"] == 1 and steps[0]["total"] == 2
+        assert steps[1]["index"] == 2 and steps[1]["total"] == 2
+
+        tool_events = [e for e in events if e["type"] == "tool_result"]
+        assert len(tool_events) == 2
+        assert all(e["tool"] == "execute_grasp" for e in tool_events)
+        assert all(e["ok"] is True for e in tool_events)
+
+        result = next(e for e in events if e["type"] == "agent_result")
+        assert result["task"]["type"] == "plan"
+        assert len(result["task"]["steps"]) == 2
+        assert isinstance(result["tool_result"], list)
+        assert len(result["tool_result"]) == 2
 
 
 class TestOrchestrator:
@@ -136,20 +176,53 @@ class TestOrchestrator:
         assert "意图识别失败" in error_event["message"]
         assert events[-1]["type"] == "done"
 
-    def test_tool_call_mapping(self):
-        # 动作任务映射
-        assert Orchestrator._tool_call_for_task(
+    def test_tool_calls_mapping(self):
+        # plan 任务按步骤映射为多个 execute_grasp
+        assert Orchestrator._tool_calls_for_task(
+            {
+                "type": "plan",
+                "steps": [
+                    {"action_type": "抓取", "target_object": "苹果", "params": {"x": 1, "y": 2}},
+                    {"action_type": "放置", "target_object": "杯子", "params": {}},
+                ],
+            }
+        ) == [
+            ("execute_grasp", {"object_name": "苹果", "x": 1, "y": 2}),
+            ("execute_grasp", {"object_name": "杯子"}),
+        ]
+        # 单步 action 任务退化为单元素列表
+        assert Orchestrator._tool_calls_for_task(
             {"type": "action", "action_type": "抓取", "target_object": "水杯", "params": {}}
-        ) == ("execute_grasp", {"object_name": "水杯"})
-        # 放置类动作暂无对应工具
-        assert Orchestrator._tool_call_for_task(
+        ) == [("execute_grasp", {"object_name": "水杯"})]
+        # 放置类动作也映射到 execute_grasp（当前以抓取-递送近似）
+        assert Orchestrator._tool_calls_for_task(
             {"type": "action", "action_type": "放置", "target_object": "水杯", "params": {}}
-        ) is None
+        ) == [("execute_grasp", {"object_name": "水杯"})]
         # 系统任务映射
-        assert Orchestrator._tool_call_for_task({"type": "system", "command": "查询状态"}) == (
-            "query_robot_status",
-            {},
-        )
+        assert Orchestrator._tool_calls_for_task({"type": "system", "command": "查询状态"}) == [
+            ("query_robot_status", {}),
+        ]
         # 闲聊无任务
-        assert Orchestrator._tool_call_for_task(None) is None
-        assert Orchestrator._tool_call_for_task({"type": "chat"}) is None
+        assert Orchestrator._tool_calls_for_task(None) == []
+        assert Orchestrator._tool_calls_for_task({"type": "chat"}) == []
+
+    def test_real_orchestrator_decomposes_complex_action(self):
+        recognizer = FakeRecognizer(intent="动作指令")
+        orch = Orchestrator(recognizer=recognizer)
+        events = collect_events(orch, "先把苹果拿过来，再把杯子放到桌上")
+
+        assert events[1]["intent"] == "动作指令"
+        assert events[1]["agent"] == "decompose"
+
+        steps = [e for e in events if e["type"] == "step"]
+        assert len(steps) == 2
+
+        tool_events = [e for e in events if e["type"] == "tool_result"]
+        assert len(tool_events) == 2
+        assert all(e["tool"] == "execute_grasp" for e in tool_events)
+
+        result = next(e for e in events if e["type"] == "agent_result")
+        assert result["task"]["type"] == "plan"
+        assert len(result["task"]["steps"]) == 2
+        assert isinstance(result["tool_result"], list)
+        assert len(result["tool_result"]) == 2

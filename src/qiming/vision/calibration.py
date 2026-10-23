@@ -11,13 +11,15 @@ from src.qiming.arm_control.mycobot_driver import MyCobotDriver
 class EyeToHandCalibrator:
     """
     Eye-to-Hand (眼在手外) 手眼标定框架
-    
-    相机固定在外部，标定板固定在机械臂末端。
-    核心方程: AX = XB
-    
-    A = T_E2B * inv(T_E1B)  -- 两次机械臂位姿的相对变换
-    B = T_K2C * inv(T_K1C)  -- 两次视觉观测的相对变换
-    X = T_BC                -- 相机在基坐标系下的外参（待求解）
+
+    相机固定在外部，标定板固定在机械臂末端。记
+        T_g2b(i) : 末端在基坐标系下的位姿（机械臂正解给出，单位 mm）
+        T_t2c(i) : 标定板在相机坐标系下的位姿（solvePnP 给出，单位 m）
+        T_t2g    : 标定板在末端坐标系下的固定位姿（未知，与位姿无关）
+        X = T_BC : 相机在基坐标系下的外参（待求解）
+    物理关系: T_t2c(i) = inv(X) @ T_g2b(i) @ T_t2g
+    对任意两组位姿 (i, j) 消去未知的 T_t2g 即得核心方程 (AX = XB 形式):
+        T_g2b_i @ inv(T_g2b_j) = X @ (T_t2c_i @ inv(T_t2c_j)) @ inv(X)
     """
 
     def __init__(self, depth_camera: DepthCamera, arm_driver: MyCobotDriver):
@@ -203,75 +205,157 @@ class EyeToHandCalibrator:
 
         # B = T2 * inv(T1)
         T1_inv = np.linalg.inv(T1)
-        B = T2 * T1_inv
+        B = T2 @ T1_inv
 
         print(f"[计算] B矩阵 (观测#{idx_2} * 观测#{idx_1}^-1):")
         print(f"  B = \n{B}")
         return B
 
-    def calibrate_hand_eye(self) -> Optional[np.ndarray]:
+    def calibrate_hand_eye(self, method: int = cv2.CALIB_HAND_EYE_TSAI) -> Optional[np.ndarray]:
         """
-        求解手眼标定: AX = XB
-        
-        使用OpenCV的calibrateHandEye函数求解X
-        
+        求解手眼标定方程，得到相机在基坐标系下的外参 T_BC。
+
+        Eye-to-Hand 配置下相机固定、标定板固定在机械臂末端，物理关系为
+            T_t2c(i) = inv(T_BC) @ T_g2b(i) @ T_t2g
+        其中 T_BC 为待求的相机在基坐标系下的外参。OpenCV 的 calibrateHandEye
+        约定输入 gripper2base，因此 Eye-to-Hand 场景需要传入「基坐标系 -> 末端」的
+        变换（即 T_g2b 的逆），此时返回的即为 T_c2b = T_BC。
+
+        单位: 标定板 objp 由 SQUARE_SIZE(米) 生成，solvePnP 输出的平移为米，
+        而机械臂位姿为毫米。两者混用只会破坏平移解（旋转部分仅由旋转矩阵决定，
+        不受影响），因此这里统一换算到米求解，再把 T_BC 的平移换算回毫米，
+        保证 T_BC 可直接把「相机 mm 坐标」映射为「基坐标 mm 坐标」。
+
+        参数:
+            method: OpenCV 手眼标定方法，见 cv2.HandEyeCalibrationMethod
+
         返回:
-            T_BC: 相机在基坐标系下的外参 (4x4)
+            T_BC: 相机在基坐标系下的外参 (4x4，平移单位 mm)，数据不足时返回 None
         """
-        if len(self.robot_poses) < 2:
-            print("[错误] 需要至少2组机械臂位姿数据")
+        if len(self.robot_poses) < 3:
+            print("[错误] 手眼标定至少需要 3 组数据")
             return None
-        if len(self.camera_observations) < 2:
-            print("[错误] 需要至少2组视觉观测数据")
+        if len(self.camera_observations) < 3:
+            print("[错误] 手眼标定至少需要 3 组视觉观测")
             return None
 
         if len(self.robot_poses) != len(self.camera_observations):
             print("[错误] 机械臂位姿和视觉观测数据数量不匹配")
             return None
 
-        # 准备输入数据
-        r_end2base = [pose[0] for pose in self.robot_poses]
-        t_end2base = [pose[1].reshape(3, 1) for pose in self.robot_poses]
-        
-        r_cam2target = [obs[0] for obs in self.camera_observations]
-        t_cam2target = [obs[1].reshape(3, 1) for obs in self.camera_observations]
+        to_meter = 1e-3
 
-        # 调用OpenCV标定函数
-        # method=0: CALIB_HAND_EYE_TSAI
-        # method=1: CALIB_HAND_EYE_PARK
-        # method=2: CALIB_HAND_EYE_HORAUD
-        # method=3: CALIB_HAND_EYE_ANDREFF
-        # method=4: CALIB_HAND_EYE_DANIILIDIS
+        # Eye-to-Hand: 传入 base2gripper (即 gripper2base 的逆)，位姿统一换算到米
+        r_base2gripper = []
+        t_base2gripper = []
+        for rotation_matrix, translation_vector in self.robot_poses:
+            T_g2b = self.get_transform_matrix(rotation_matrix, translation_vector)
+            T_g2b[:3, 3] *= to_meter
+            T_b2g = np.linalg.inv(T_g2b)
+            r_base2gripper.append(T_b2g[:3, :3])
+            t_base2gripper.append(T_b2g[:3, 3].reshape(3, 1))
+
+        # 标定板在相机坐标系下的位姿（平移单位已是米）
+        r_target2cam = [obs[0] for obs in self.camera_observations]
+        t_target2cam = [obs[1].reshape(3, 1) for obs in self.camera_observations]
+
         r_cam2base, t_cam2base = cv2.calibrateHandEye(
-            r_end2base,
-            t_end2base,
-            r_cam2target,
-            t_cam2target,
-            self.camera_intrinsic_matrix,
-            self.camera_dist_coeffs,
-            method=cv2.CALIB_HAND_EYE_TSAI
+            r_base2gripper,
+            t_base2gripper,
+            r_target2cam,
+            t_target2cam,
+            method=method,
         )
 
-        # 构造4x4变换矩阵
-        self.T_BC = self.get_transform_matrix(r_cam2base, t_cam2base)
-        
+        T_BC = self.get_transform_matrix(r_cam2base, t_cam2base)
+        T_BC[:3, 3] /= to_meter  # 米 -> 毫米，使 T_BC 与工程中 mm 坐标一致
+        self.T_BC = T_BC
         self._calibrated = True
-        self.depth_camera.T_cam2end = self.T_BC  # 复用现有属性名
-        
-        print("\n" + "="*50)
-        print("[结果] 手眼标定完成!")
-        print("="*50)
-        print(f"T_BC (相机在基坐标系下的外参):")
-        print(self.T_BC)
-        print("="*50)
-        
-        return self.T_BC
+        self.depth_camera.T_cam2end = T_BC  # 复用现有属性名
 
-    def run_calibration(self):
+        print("\n" + "=" * 50)
+        print("[结果] 手眼标定完成!")
+        print("=" * 50)
+        print("T_BC (相机在基坐标系下的外参, 平移单位 mm):")
+        print(T_BC)
+
+        mean_rot, max_rot, mean_trans = self.compute_calibration_error(T_BC)
+        print("-" * 50)
+        print(f"一致性残差: 姿态平均 {mean_rot:.3f} 度 / 最大 {max_rot:.3f} 度, "
+              f"平移平均 {mean_trans:.3f} mm")
+        print("=" * 50)
+
+        return T_BC
+
+    def compute_calibration_error(self, T_BC: Optional[np.ndarray] = None) -> Tuple[float, float, float]:
         """
-        执行完整的手眼标定流程
-        
-        注意: 需要先设置内参矩阵，且机械臂和相机已连接
+        计算手眼标定的一致性残差。
+
+        由物理关系 T_t2c(i) = inv(T_BC) @ T_g2b(i) @ T_t2g 可知，对任意两组位姿 (i, j)
+        消去未知的 T_t2g 后应满足：
+            T_BC @ (T_t2c_i @ inv(T_t2c_j)) @ inv(T_BC) == T_g2b_i @ inv(T_g2b_j)
+        右侧是机械臂的相对运动，左侧是由相机观测相对运动经外参换算出的同一运动，
+        以两侧旋转部分的角度差、平移部分的距离差作为残差。
+
+        单位: 比较在「米」下进行（相机观测本身即米，机械臂位姿为毫米需换算），
+        报告时平移换算回 mm。
+
+        返回:
+            (平均姿态残差(度), 最大姿态残差(度), 平均平移残差(mm))
+        """
+        if T_BC is None:
+            T_BC = self.T_BC
+        if T_BC is None or len(self.robot_poses) < 2:
+            return 0.0, 0.0, 0.0
+
+        to_meter = 1e-3
+        X = np.asarray(T_BC, dtype=float).copy()
+        X[:3, 3] *= to_meter          # 统一换算到米
+        X_inv = np.linalg.inv(X)
+
+        rotation_errors = []
+        translation_errors = []
+
+        for i in range(len(self.robot_poses)):
+            for j in range(i + 1, len(self.robot_poses)):
+                P_i = self.get_transform_matrix(*self.robot_poses[i])
+                P_j = self.get_transform_matrix(*self.robot_poses[j])
+                P_i[:3, 3] *= to_meter
+                P_j[:3, 3] *= to_meter
+                A = P_i @ np.linalg.inv(P_j)          # 机械臂相对运动
+
+                O_i = self.get_transform_matrix(*self.camera_observations[i])
+                O_j = self.get_transform_matrix(*self.camera_observations[j])
+                B = O_i @ np.linalg.inv(O_j)          # 相机观测到的标定板相对运动
+                A_pred = X @ B @ X_inv                # 经外参换算出的同一相对运动
+
+                R_diff = A[:3, :3].T @ A_pred[:3, :3]
+                cos_angle = (np.trace(R_diff) - 1.0) / 2.0
+                rotation_errors.append(
+                    float(np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))))
+                translation_errors.append(
+                    float(np.linalg.norm(A[:3, 3] - A_pred[:3, 3])) / to_meter)
+
+        if not rotation_errors:
+            return 0.0, 0.0, 0.0
+        return (float(np.mean(rotation_errors)),
+                float(np.max(rotation_errors)),
+                float(np.mean(translation_errors)))
+
+
+    def run_calibration(self, interactive: bool = True,
+                        save_to: Optional[str] = None) -> Optional[np.ndarray]:
+        """
+        执行完整的手眼标定流程：采数据 -> 求 T_BC -> 输出残差。
+
+        注意: 需要先设置内参矩阵，且机械臂和相机已连接。
+
+        参数:
+            interactive: 为 True 时每轮等待用户按 Enter 再采集
+            save_to: 不为空时把标定结果(含内参)保存到该 .npz 文件
+
+        返回:
+            T_BC 矩阵，采集失败时返回 None
         """
         if not self._intrinsic_calibrated:
             print("[警告] 内参矩阵未设置，请先调用 set_intrinsic_matrix()")
@@ -281,31 +365,53 @@ class EyeToHandCalibrator:
             print("    calibrator.set_intrinsic_matrix(K, dist)")
             return None
 
-        print(f"\n开始Eye-to-Hand手眼标定流程")
+        if not self.depth_camera.open_camera():
+            print("[错误] 相机打开失败，无法采集标定图像")
+            return None
+
+        print("\n开始 Eye-to-Hand 手眼标定流程")
         print(f"计划采集 {self.calibration_times} 组数据\n")
 
-        for i in range(self.calibration_times):
-            print(f"\n--- 第 {i+1}/{self.calibration_times} 轮 ---")
-            
-            # 1. 采集机械臂位姿
-            input("移动机械臂到标定位置后按 Enter 采集位姿...")
-            self.collect_robot_pose()
-            
-            # 2. 采集视觉观测
-            input("确保标定板在视野中后按 Enter 采集图像...")
-            
-            # 这里需要相机实际连接后获取帧
-            # frame = self.depth_camera.get_frames()[0]
-            # self.collect_camera_observation_from_frame(frame)
-            
-            # 临时: 使用占位数据 (需要手动提供rvec, tvec)
-            print("  [占位] 请提供solvePnP结果 (rvec, tvec)")
-            print("  [占位] 或等待相机接入后自动采集")
+        collected = 0
+        attempts = 0
+        max_attempts = self.calibration_times * 3
+        try:
+            while collected < self.calibration_times and attempts < max_attempts:
+                attempts += 1
+                print(f"\n--- 第 {collected + 1}/{self.calibration_times} 轮 ---")
+                if interactive:
+                    input("移动机械臂到标定位置后按 Enter 采集...")
+
+                color_frame, _ = self.depth_camera.get_frames()
+                if color_frame is None:
+                    print("[警告] 未获取到图像帧，请检查相机连接")
+                    continue
+
+                # 1. 采集机械臂位姿
+                self.collect_robot_pose()
+
+                # 2. 采集视觉观测（自动检测标定板）
+                if not self.collect_camera_observation_from_frame(color_frame):
+                    print("[警告] 本帧标定板检测失败，已丢弃本次机械臂位姿")
+                    self.robot_poses.pop()
+                    continue
+
+                collected += 1
+        finally:
+            self.depth_camera.close_camera()
 
         self._data_collected = True
-        
-        # 3. 计算手眼标定
-        return self.calibrate_hand_eye()
+
+        if collected < 3:
+            print(f"[错误] 有效数据仅 {collected} 组，不足 3 组，无法标定")
+            return None
+
+        result = self.calibrate_hand_eye()
+
+        if result is not None and save_to:
+            self.save_calibration_result(save_to)
+
+        return result
 
     def get_camera_to_base_transform(self) -> Optional[np.ndarray]:
         """
@@ -343,31 +449,41 @@ class EyeToHandCalibrator:
 
     def save_calibration_result(self, filepath: str):
         """
-        保存标定结果到文件
+        保存标定结果到文件（手眼外参，若已设置则一并保存相机内参）
         
         参数:
             filepath: .npz文件路径
         """
-        if self.T_BC is None:
+        if self.T_BC is None and self.camera_intrinsic_matrix is None:
             print("[错误] 标定结果为空，无法保存")
             return
-        
-        np.savez(filepath, T_BC=self.T_BC)
-        print(f"[保存] 标定结果已保存到 {filepath}")
+
+        payload = {}
+        if self.T_BC is not None:
+            payload["T_BC"] = self.T_BC
+        if self.camera_intrinsic_matrix is not None:
+            payload["K"] = self.camera_intrinsic_matrix
+            payload["dist"] = self.camera_dist_coeffs
+
+        np.savez(filepath, **payload)
+        print(f"[保存] 标定结果已保存到 {filepath} (字段: {', '.join(payload)})")
 
     def load_calibration_result(self, filepath: str):
         """
-        从文件加载标定结果
+        从文件加载标定结果（手眼外参及可选的相机内参）
         
         参数:
             filepath: .npz文件路径
         """
         try:
             data = np.load(filepath)
-            self.T_BC = data['T_BC']
-            self._calibrated = True
-            self.depth_camera.T_cam2end = self.T_BC
-            print(f"[加载] 标定结果已从 {filepath} 加载")
-            print(f"  T_BC = \n{self.T_BC}")
+            if "K" in data and "dist" in data:
+                self.set_intrinsic_matrix(data["K"], data["dist"])
+            if "T_BC" in data:
+                self.T_BC = data["T_BC"]
+                self._calibrated = True
+                self.depth_camera.T_cam2end = self.T_BC
+                print(f"[加载] 标定结果已从 {filepath} 加载")
+                print(f"  T_BC = \n{self.T_BC}")
         except Exception as e:
             print(f"[错误] 加载标定结果失败: {e}")

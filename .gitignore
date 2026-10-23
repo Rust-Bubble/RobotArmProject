@@ -25,4 +25,15 @@ data/
 .DS_Store
 Thumbs.db
 
+# Claude Code 配置（不提交仓库）
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+
+# SQLite 数据库文件
+*.db
+*.db-wal
+*.db-shm
+
 .env
+.idea/workspace.xml
