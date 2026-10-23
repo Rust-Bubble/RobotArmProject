@@ -42,22 +42,48 @@ scripts/
 python -m src.main --text "帮我拿桌上的水杯"
 ```
 
-## 运行后端并自测
+## Web 录音、STT 与 TTS
+
+项目已支持在浏览器中录音，通过后端代理调用 OpenAI-compatible
+音频转写接口，并把 TTS 音频流直接转发到浏览器播放。先安装依赖，再根据
+`.env.example` 配置环境变量：
 
 ```powershell
-# 启动后端
-./robot-arm-env/Scripts/python.exe -m uvicorn src.api.app:app --port 8000
-
-# 另开终端，运行联调一稳定性测试（前端语音流 -> 后端处理）
-./robot-arm-env/Scripts/python.exe scripts/stability_test.py --rounds 20
-
-# 运行单元/集成测试
-./robot-arm-env/Scripts/python.exe -m pytest tests/
+python -m pip install -r requirements.txt
+$env:STT_API_URL = "https://your-stt-service.example/v1/audio/transcriptions"
+$env:STT_API_KEY = "replace-me"
+$env:STT_MODEL = "whisper-1"
+$env:TTS_API_URL = "https://api.openai.com/v1/audio/speech"
+$env:TTS_API_KEY = "replace-me"
+$env:TTS_MODEL = "gpt-4o-mini-tts"
+$env:TTS_VOICE = "alloy"
+python -m uvicorn src.api.app:app --reload --host 127.0.0.1 --port 8000
 ```
 
-前端语音输入使用浏览器 Web Speech API（Chrome/Edge 可用），识别结果通过
-WebSocket 发给后端；对话上下文由 `src/qiming/memory/` 统一管理并持久化到
-数据库，断线重连、服务重启后自动恢复。详细说明见 `docs/memory_and_stability.md`。
+如果使用 `src/qiming/mllm/.env` 中已有的 DashScope 配置，TTS 会自动复用
+`DASHSCOPE_API_KEY` 和 `DASHSCOPE_BASE_URL`。在该文件中增加以下配置即可：
+
+```dotenv
+TTS_PROVIDER=dashscope
+TTS_MODEL=qwen-audio-3.0-tts-flash
+TTS_VOICE=longanhuan_v3.6
+TTS_RESPONSE_FORMAT=mp3
+STT_PROVIDER=dashscope
+STT_MODEL=qwen3-asr-flash
+```
+
+另开一个终端启动前端：
+
+```powershell
+cd frontend
+pnpm install
+pnpm dev
+```
+
+访问 `http://127.0.0.1:5173`，允许麦克风权限后即可录音转写。转写完成后，
+页面会自动请求 TTS 并优先使用 MediaSource 边接收边播放；不支持 MediaSource
+音频流的浏览器会降级为完整下载后播放。API Key 只保存在后端环境变量中，
+不会下发到浏览器。
 
 ## 后续开发重点
 

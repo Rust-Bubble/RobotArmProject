@@ -24,6 +24,7 @@ import {
   login,
   register,
 } from "./api/auth";
+import { SpeakButton, VoiceInput } from "./SpeechControls";
 
 interface Message {
   id: number;
@@ -289,11 +290,12 @@ export default function App() {
   };
 
   // ---------- 发送文本 ----------
-  const sendMessage = (content: string, meta: string) => {
-    const text = content.trim();
-    if (!text || waiting || !clientRef.current?.ready) return;
+  const sendText = (rawText: string = input) => {
+    const content = rawText.trim();
+    if (!content || waiting || !clientRef.current?.ready) return;
+    setInput("");
     setNotice("");
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", text, meta }]);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", text: content, meta: rawText === input ? "文本输入" : "语音输入" }]);
     setEvents([]);
     setWaiting(true);
     clientRef.current.sendText(text);
@@ -308,45 +310,6 @@ export default function App() {
     setTask(EMPTY_TASK);
     setWaiting(false);
     setNotice("");
-  };
-
-  // ---------- 麦克风（浏览器语音识别 -> 文本 -> WebSocket） ----------
-  const toggleMic = () => {
-    if (listening) {
-      recognitionRef.current?.stop();
-      return;
-    }
-    const SRClass = getSpeechRecognition();
-    if (!SRClass) {
-      setNotice("当前浏览器不支持语音识别（推荐使用 Chrome / Edge），请先用文本输入。");
-      return;
-    }
-    if (!wsConnected || waiting) {
-      setNotice(waiting ? "上一条消息还在处理中，请稍候。" : "后端未连接，无法发送语音消息。");
-      return;
-    }
-    const recognition = new SRClass();
-    recognition.lang = "zh-CN";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onresult = (e) => {
-      const transcript = e.results?.[0]?.[0]?.transcript ?? "";
-      if (transcript.trim()) sendMessage(transcript.trim(), "语音输入");
-    };
-    recognition.onerror = () => {
-      setListening(false);
-      setNotice("语音识别失败，请重试或改用文本输入。");
-    };
-    recognition.onend = () => setListening(false);
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-      setListening(true);
-      setNotice("");
-    } catch {
-      setListening(false);
-      setNotice("麦克风启动失败，请检查浏览器麦克风权限。");
-    }
   };
 
   // ================= 登录视图 =================
@@ -508,16 +471,93 @@ export default function App() {
                     <Bot size={14} />
                     启明
                   </span>
-                  <small>思考中</small>
-                </div>
-                <div className="turn-content">
-                  <div className="listening-line">
-                    <span className="listening-dot" />
-                    Orchestrator 正在调度 Agent…
-                  </div>
+                )}
+                <small>{msg.meta ?? ""}</small>
+              </div>
+              <div className="turn-content">
+                <p>{msg.text}</p>
+                {msg.role === "agent" && <SpeakButton text={msg.text} />}
+              </div>
+            </div>
+          ))}
+
+          {waiting && (
+            <div className="turn agent-turn">
+              <div className="turn-meta">
+                <span className="agent-name">
+                  <Bot size={14} />
+                  启明
+                </span>
+                <small>思考中</small>
+              </div>
+              <div className="turn-content">
+                <div className="listening-line">
+                  <span className="listening-dot" />
+                  Orchestrator 正在调度 Agent…
                 </div>
               </div>
-            )}
+            </div>
+          )}
+        </div>
+
+        <div className="text-composer">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") sendText();
+            }}
+            placeholder={wsConnected ? "输入消息，回车发送…" : "后端未连接，无法发送"}
+            disabled={!wsConnected}
+          />
+          <button
+            type="button"
+            onClick={sendText}
+            disabled={!wsConnected || waiting || !input.trim()}
+            aria-label="发送"
+          >
+            <Send size={16} />
+          </button>
+          <VoiceInput disabled={!wsConnected || waiting} onTranscript={(text) => sendText(text)} />
+        </div>
+
+        {notice && (
+          <p className="permission-notice" role="status">
+            {notice}
+          </p>
+        )}
+
+        <footer className="interface-note">
+          <span>STT · 已接入</span>
+          <span>{wsConnected ? "Agent · 已连接" : "Agent · 未连接"}</span>
+          <span>
+            <Volume2 size={12} />
+            TTS · 点击消息播报
+          </span>
+        </footer>
+      </section>
+
+      <aside
+        className={`control-drawer ${drawerOpen ? "open" : ""}`}
+        onMouseEnter={() => setDrawerOpen(true)}
+        onMouseLeave={() => setDrawerOpen(false)}
+      >
+        <button
+          type="button"
+          className="drawer-handle"
+          onClick={() => setDrawerOpen((value) => !value)}
+          onFocus={() => setDrawerOpen(true)}
+          aria-expanded={drawerOpen}
+          aria-controls="agent-console"
+        >
+          <ChevronLeft size={17} />
+          <span>控制台</span>
+        </button>
+
+        <div className="drawer-content" id="agent-console">
+          <div className="drawer-title">
+            <span>AGENT CONSOLE</span>
+            <h2>任务控制台</h2>
           </div>
 
           <div className="text-composer">
