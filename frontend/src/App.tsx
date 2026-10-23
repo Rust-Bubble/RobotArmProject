@@ -14,6 +14,7 @@ import {
 import {
   ChatClient,
   type ChatEvent,
+  type HistoryEvent,
   type RobotStatusEvent,
   type ToolResultEvent,
 } from "./api/chatClient";
@@ -71,6 +72,30 @@ const ROBOT_STATE_LABELS: Record<string, string> = {
 let messageSeq = 0;
 const nextId = () => ++messageSeq;
 
+// ---------- 浏览器语音识别（Web Speech API）最小类型声明 ----------
+interface SpeechRecognitionResultLike {
+  transcript: string;
+}
+interface SpeechRecognitionEventLike {
+  results: ArrayLike<ArrayLike<SpeechRecognitionResultLike>>;
+}
+interface SpeechRecognitionLike {
+  lang: string;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((e: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((e: unknown) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+const getSpeechRecognition = (): SpeechRecognitionCtor | null =>
+  (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor })
+    .SpeechRecognition ??
+  (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition ??
+  null;
+
 export default function App() {
   const token = getStoredToken();
 
@@ -93,10 +118,25 @@ export default function App() {
 
   const clientRef = useRef<ChatClient | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const [listening, setListening] = useState(false);
 
   // ---------- WebSocket 事件处理 ----------
   const handleEvent = useCallback((event: ChatEvent) => {
     switch (event.type) {
+      case "history": {
+        // 连接建立 / 新建会话时后端推来的会话历史（MemoryManager 持久化恢复）
+        const historyEvent = event as HistoryEvent;
+        setMessages(
+          (historyEvent.messages ?? []).map((m) => ({
+            id: nextId(),
+            role: m.role,
+            text: m.text,
+            meta: m.agent ? `${m.agent} agent` : "历史消息",
+          })),
+        );
+        break;
+      }
       case "intent":
         setTask((prev) => ({ ...prev, intent: event.intent ?? "—" }));
         setEvents((prev) => [
@@ -249,28 +289,64 @@ export default function App() {
   };
 
   // ---------- 发送文本 ----------
-  const sendText = () => {
-    const content = input.trim();
-    if (!content || waiting || !clientRef.current?.ready) return;
-    setInput("");
+  const sendMessage = (content: string, meta: string) => {
+    const text = content.trim();
+    if (!text || waiting || !clientRef.current?.ready) return;
     setNotice("");
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", text: content, meta: "文本输入" }]);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", text, meta }]);
     setEvents([]);
     setWaiting(true);
-    clientRef.current.sendText(content);
+    clientRef.current.sendText(text);
   };
 
+  const sendText = () => sendMessage(input, "文本输入");
+
   const resetSession = () => {
-    setMessages([]);
+    // 通知后端新建会话（服务端会回推一条空的 history），本地状态随之清空
+    clientRef.current?.newSession();
     setEvents([]);
     setTask(EMPTY_TASK);
     setWaiting(false);
     setNotice("");
   };
 
-  // ---------- 麦克风（STT 未接入，保留按钮占位） ----------
-  const onMicClick = () => {
-    setNotice("语音识别（STT）尚未接入，请先用文本输入与 Agent 对话。");
+  // ---------- 麦克风（浏览器语音识别 -> 文本 -> WebSocket） ----------
+  const toggleMic = () => {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const SRClass = getSpeechRecognition();
+    if (!SRClass) {
+      setNotice("当前浏览器不支持语音识别（推荐使用 Chrome / Edge），请先用文本输入。");
+      return;
+    }
+    if (!wsConnected || waiting) {
+      setNotice(waiting ? "上一条消息还在处理中，请稍候。" : "后端未连接，无法发送语音消息。");
+      return;
+    }
+    const recognition = new SRClass();
+    recognition.lang = "zh-CN";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (e) => {
+      const transcript = e.results?.[0]?.[0]?.transcript ?? "";
+      if (transcript.trim()) sendMessage(transcript.trim(), "语音输入");
+    };
+    recognition.onerror = () => {
+      setListening(false);
+      setNotice("语音识别失败，请重试或改用文本输入。");
+    };
+    recognition.onend = () => setListening(false);
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setListening(true);
+      setNotice("");
+    } catch {
+      setListening(false);
+      setNotice("麦克风启动失败，请检查浏览器麦克风权限。");
+    }
   };
 
   // ================= 登录视图 =================
@@ -462,7 +538,12 @@ export default function App() {
             >
               <Send size={16} />
             </button>
-            <button type="button" className="mic-button small" onClick={onMicClick} aria-label="语音输入">
+            <button
+              type="button"
+              className={`mic-button small${listening ? " listening" : ""}`}
+              onClick={toggleMic}
+              aria-label={listening ? "停止语音输入" : "语音输入"}
+            >
               <Mic size={18} />
             </button>
           </div>
@@ -474,7 +555,7 @@ export default function App() {
           )}
 
           <footer className="interface-note">
-            <span>STT · 未接入</span>
+            <span>STT · 浏览器语音识别</span>
             <span>{wsConnected ? "Agent · 已连接" : "Agent · 未连接"}</span>
             <span>
               <Volume2 size={12} />

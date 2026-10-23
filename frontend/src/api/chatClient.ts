@@ -19,6 +19,19 @@ export interface RobotStatusEvent {
   updated_at?: string;
 }
 
+/** 会话历史消息：由后端 MemoryManager 从数据库恢复（见 qiming/memory/manager.py） */
+export interface HistoryMessage {
+  role: "user" | "agent";
+  text: string;
+  agent?: string;
+}
+
+export interface HistoryEvent {
+  type: "history";
+  session_id?: string;
+  messages?: HistoryMessage[];
+}
+
 export type ChatEvent =
   | ({
       type: "status" | "intent" | "agent_start" | "agent_result" | "error" | "done" | "pong";
@@ -41,7 +54,8 @@ export type ChatEvent =
       } | null;
     })
   | ToolResultEvent
-  | RobotStatusEvent;
+  | RobotStatusEvent
+  | HistoryEvent;
 
 export interface ChatClientHandlers {
   onOpen?: () => void;
@@ -88,6 +102,12 @@ export class ChatClient {
   ping(): void {
     if (!this.ready) return;
     this.ws?.send(JSON.stringify({ type: "ping" }));
+  }
+
+  /** 请求后端新建会话（清空上下文，旧会话记录保留在数据库） */
+  newSession(): void {
+    if (!this.ready) return;
+    this.ws?.send(JSON.stringify({ type: "new_session" }));
   }
 
   close(): void {

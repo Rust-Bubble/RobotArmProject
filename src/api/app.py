@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
 from src.qiming.database.connection import db_manager, Base
+from src.qiming.memory.manager import memory_manager
 from src.api.auth import router as auth_router
 from src.api.chat import router as chat_router
 
@@ -13,7 +14,8 @@ async def lifespan(app: FastAPI):
     async with db_manager._engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
-    # 关闭时释放资源
+    # 关闭时释放资源（对话记录已落库，进程内会话缓存直接清空即可）
+    await memory_manager.close()
     await db_manager.close()
 
 app = FastAPI(title="启明智手 API", version="0.1.0", lifespan=lifespan)

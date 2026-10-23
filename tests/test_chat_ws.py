@@ -45,11 +45,14 @@ def token(client):
 
 
 def recv_initial_status(ws) -> dict:
-    """连接建立后后端会先推送一条机械臂状态快照，供前端状态卡片初始化。"""
+    """连接建立后后端会先推送机械臂状态快照和会话历史，供前端初始化。"""
     snapshot = ws.receive_json()
     assert snapshot["type"] == "robot_status"
     assert snapshot["state"] in {"idle", "busy", "estop"}
     assert "phase" in snapshot and "driver" in snapshot
+    history = ws.receive_json()
+    assert history["type"] == "history"
+    assert "session_id" in history and "messages" in history
     return snapshot
 
 
