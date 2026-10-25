@@ -47,6 +47,20 @@ class ArmController:
         status_hub.update(state="idle", phase="任务完成", target="")
         return action.reply
 
+    def move_to_pose(self, pose, label: str = "移动到目标坐标", target: str = "") -> None:
+        """按坐标指令直接移动到位姿（控制网关的 move 指令走这里）。
+
+        与 execute 共用同一套状态上报与异常复位逻辑，保证网关下发的单点移动
+        也能在前端状态卡片上看到执行过程。
+        """
+        status_hub.update(state="busy", target=target, phase=label)
+        try:
+            self.driver.move_to(tuple(float(v) for v in pose))
+        except Exception:  # noqa: BLE001
+            status_hub.update(state="idle", phase="执行中断", target="")
+            raise
+        status_hub.update(state="idle", phase="任务完成", target="")
+
     def stop(self) -> None:
         """急停：先打开夹爪释放物体，再把状态切到已急停。"""
         self.driver.open_gripper()

@@ -6,6 +6,7 @@
 
 前端 -> 后端:
     {"type": "text", "content": "帮我拿水杯"}   # 用户文本输入（语音识别结果走同一条消息）
+    {"type": "coordinates", "command": {...}}    # 控制网关下发的坐标指令（见 gateway.py）
     {"type": "new_session"}                     # 新建会话（清空上下文重新开始）
     {"type": "ping"}
 
@@ -16,6 +17,7 @@
     {"type": "intent",       "intent": "动作指令", "agent": "action"}
     {"type": "agent_start",  "agent": "action"}
     {"type": "tool_result",  "tool": "execute_grasp", "ok": true, "result": {...}}
+    {"type": "command_result", "ok": true, "action": "move", ...}   # 坐标指令执行结果
     {"type": "agent_result", "agent": "action", "message": "...", "task": {...}}
     {"type": "error",        "message": "..."}
     {"type": "done"}
@@ -36,6 +38,8 @@ from src.qiming.database.connection import db_manager
 from src.qiming.database.models import User
 from src.qiming.memory.manager import SessionMemory, memory_manager
 from src.qiming.orchestrator.orchestrator import MockOrchestrator, Orchestrator
+from src.qiming.tools.builtin import get_coordinate_gateway
+from src.qiming.utils.async_utils import run_with_status_events
 from src.qiming.utils.config import load_yaml
 
 logger = logging.getLogger(__name__)
@@ -108,6 +112,19 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
                 memory = await memory_manager.reset_session(user.id)
                 orchestrator.history = memory.history
                 await _push_history(websocket, memory)
+                continue
+
+            if data.get("type") == "coordinates":
+                # 控制网关坐标指令：校验、串行驱动、幂等由 CoordinateGateway 负责，
+                # 执行期间同样把机械臂状态实时推给前端
+                command = data.get("command") or {}
+                holder: dict = {}
+                async for event in run_with_status_events(
+                    get_coordinate_gateway().submit, holder, command
+                ):
+                    await websocket.send_json(event)
+                await websocket.send_json(
+                    {"type": "command_result", **holder["result"]})
                 continue
 
             if data.get("type") != "text":

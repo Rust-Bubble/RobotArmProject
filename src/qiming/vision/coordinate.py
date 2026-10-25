@@ -4,6 +4,7 @@ import numpy as np
 from typing import List, Optional
 
 from src.qiming.arm_control.pose_presets import DEFAULT_PRESET_NAME, apply_preset
+from src.qiming.arm_control.workspace import clamp_pose
 from src.qiming.models import ArmAction, MllmDecision, Pose
 from src.qiming.vision.depth_camera import DepthCamera
 from src.qiming.arm_control.mycobot_driver import MyCobotDriver
@@ -189,21 +190,14 @@ class CoordinateConverter:
 
     def clamp_coords(self, coords: List[float]) -> List[float]:
         """
-        限制机械臂坐标在安全工作空间内
-        
+        限制机械臂坐标在安全工作空间内（边界定义见 arm_control/workspace.py）
+
         参数:
             coords: [X, Y, Z, Rx, Ry, Rz]
         返回:
             限制后的坐标
         """
-        x, y, z, rx, ry, rz = coords
-        x = float(np.clip(x, -350.0, 350.0))
-        y = float(np.clip(y, -350.0, 350.0))
-        z = float(np.clip(z, -41.0, 523.9))
-        rx = float(np.clip(rx, -180.0, 180.0))
-        ry = float(np.clip(ry, -180.0, 180.0))
-        rz = float(np.clip(rz, -180.0, 180.0))
-        return [x, y, z, rx, ry, rz]
+        return clamp_pose(coords)
 
     def to_arm_action(self, decision: MllmDecision, handover_coords: List[float]) -> ArmAction:
         """
