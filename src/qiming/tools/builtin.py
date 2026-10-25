@@ -2,7 +2,8 @@
 """内置的外部系统工具（Function Calling 基础 API）。
 
 覆盖三类外部系统：
-    - 机械臂：查询状态、急停、抓取执行（通过 ArmController，mock/真实由配置决定）
+    - 机械臂：查询状态、急停、抓取执行、接收坐标指令
+      （通过 ArmController / CoordinateGateway，mock/真实由配置决定）
     - 语音反馈：TTS 播报
     - 系统：软件复位（暂以日志代替）
 
@@ -15,6 +16,7 @@
 from __future__ import annotations
 
 from src.qiming.arm_control.controller import ArmController
+from src.qiming.arm_control.gateway import CoordinateGateway
 from src.qiming.arm_control.pose_presets import (
     DEFAULT_PLACE_PRESET_NAME,
     DEFAULT_PRESET_NAME,
@@ -33,6 +35,7 @@ FALLBACK_HANDOVER = [80.0, -220.0, 180.0]
 # 全局共享的反馈/控制对象（无硬件阶段用 mock 驱动）
 _tts = TtsFeedback()
 _arm_controller: ArmController | None = None
+_gateway: CoordinateGateway | None = None
 
 
 def _load_robot_cfg() -> dict:
@@ -52,6 +55,25 @@ def _get_arm_controller() -> ArmController:
     if _arm_controller is None:
         _arm_controller = ArmController.from_config(_load_robot_cfg())
     return _arm_controller
+
+
+def _default_place_pose(cfg: dict) -> list[float]:
+    """默认递送位姿：handover_coords 位置 + 放置预设姿态。"""
+    handover = list(cfg.get("handover_coords") or FALLBACK_HANDOVER)
+    return list(apply_preset(
+        handover[:3], cfg.get("place_preset", DEFAULT_PLACE_PRESET_NAME), phase="grasp"))
+
+
+def get_coordinate_gateway() -> CoordinateGateway:
+    """获取进程级控制网关单例（WebSocket 坐标指令与工具调用共用）。"""
+    global _gateway
+    if _gateway is None:
+        cfg = _load_robot_cfg()
+        _gateway = CoordinateGateway(
+            _get_arm_controller(),
+            default_place_pose=_default_place_pose(cfg),
+        )
+    return _gateway
 
 
 def create_default_registry() -> ToolRegistry:
@@ -122,6 +144,50 @@ def create_default_registry() -> ToolRegistry:
             "message": message,
         }
 
+    @registry.tool(
+        name="execute_coords",
+        description=(
+            "接收控制网关下发的坐标指令并驱动机械臂或仿真器执行。"
+            "action=move 表示移动到指定坐标；action=grasp 表示在指定坐标抓取并递送。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "pick_pose": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "目标位姿 [x, y, z, rx, ry, rz]，位置 mm、姿态 度",
+                },
+                "action": {"type": "string", "enum": ["move", "grasp"], "description": "动作类型"},
+                "place_pose": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "description": "递送位姿（grasp 可选，缺省用配置的 handover_coords）",
+                },
+                "object_name": {"type": "string", "description": "目标物体名称（grasp 可选）"},
+                "command_id": {"type": "string", "description": "指令唯一编号，用于幂等去重"},
+            },
+            "required": ["pick_pose"],
+        },
+    )
+    def execute_coords(
+        pick_pose: list[float],
+        action: str = "move",
+        place_pose: list[float] | None = None,
+        object_name: str = "物体",
+        command_id: str | None = None,
+    ) -> dict:
+        command: dict = {
+            "action": action,
+            "pick_pose": pick_pose,
+            "object_name": object_name,
+        }
+        if place_pose is not None:
+            command["place_pose"] = place_pose
+        if command_id:
+            command["command_id"] = command_id
+        return get_coordinate_gateway().submit(command)
+
     # ---------- 语音反馈 ----------
     @registry.tool(
         name="speak",
@@ -145,8 +211,9 @@ def create_default_registry() -> ToolRegistry:
         parameters={"type": "object", "properties": {}, "required": []},
     )
     def reset_system() -> dict:
-        global _arm_controller
+        global _arm_controller, _gateway
         _arm_controller = None  # 下次访问时按配置重建
+        _gateway = None
         status_hub.reset()
         return {"reset": True, "message": "系统已复位（软件层）"}
 
