@@ -37,3 +37,4 @@ CLAUDE.local.md
 
 .env
 .idea/workspace.xml
+tests/czc_test.py
