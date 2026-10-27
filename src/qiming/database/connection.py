@@ -1,17 +1,20 @@
 # src/qiming/database/connection.py
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 
 # 加载 .env
 from dotenv import load_dotenv
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
@@ -21,6 +24,9 @@ class DatabaseManager:
         self._sessionmaker = None
 
     async def initialize(self):
+        if self._engine is not None:
+            return  # 幂等：重复初始化直接跳过（断线恢复 / 测试场景都会再调）
+
         db_type = os.getenv("DATABASE_TYPE", "sqlite").lower()
         if db_type == "postgresql":
             host = os.getenv("DATABASE_HOST", "localhost")
@@ -39,10 +45,14 @@ class DatabaseManager:
             # 对话历史每轮都会写库，SQLite 需要放宽锁等待，否则并发写入会报 database is locked
             sqlite_kwargs["connect_args"] = {"timeout": 30}
 
+        # SQL 回显默认关闭（避免刷爆日志），需要调试 SQL 时设 DATABASE_ECHO=true
+        echo = os.getenv("DATABASE_ECHO", "false").lower() in {"1", "true", "yes"}
+
         self._engine = create_async_engine(
             dsn,
-            echo=True,      # 开发时打印 SQL，生产环境可设为 False
+            echo=echo,
             future=True,
+            pool_pre_ping=True,  # 取连接前先探活，数据库重启后自动恢复连接
             **sqlite_kwargs,
         )
 
@@ -54,9 +64,33 @@ class DatabaseManager:
                 cursor.execute("PRAGMA journal_mode=WAL")
                 cursor.execute("PRAGMA busy_timeout=30000")
                 cursor.close()
+
         self._sessionmaker = async_sessionmaker(
             self._engine, expire_on_commit=False, class_=AsyncSession
         )
+        logger.info("数据库已初始化（%s）", db_type)
+
+    async def create_all(self):
+        """根据 ORM 元数据建表（已存在则跳过）。"""
+        if self._engine is None:
+            await self.initialize()
+        from src.qiming.database import models  # noqa: F401 - 确保模型已注册到 Base
+
+        async with self._engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("数据库表结构已就绪")
+
+    async def check(self) -> bool:
+        """连通性检查（供 /health 健康检查端点使用）。"""
+        try:
+            if self._engine is None:
+                await self.initialize()
+            async with self._engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            return True
+        except Exception:  # noqa: BLE001 - 健康检查只关心通不通
+            logger.exception("数据库健康检查失败")
+            return False
 
     @asynccontextmanager
     async def session(self) -> AsyncGenerator[AsyncSession, None]:
@@ -74,6 +108,9 @@ class DatabaseManager:
     async def close(self):
         if self._engine:
             await self._engine.dispose()
+            self._engine = None
+            self._sessionmaker = None
+            logger.info("数据库连接已关闭")
 
 # 全局单例
 db_manager = DatabaseManager()

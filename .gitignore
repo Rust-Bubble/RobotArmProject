@@ -20,6 +20,18 @@ config/database.local.yaml
 # Logs / data
 data/
 *.log
+logs/
+
+# Claude Code 配置（不提交仓库）
+.claude/
+.claude.json
+CLAUDE.md
+CLAUDE.local.md
+skills/
+
+# 测试 / 工具缓存
+.pytest_cache/
+.ruff_cache/
 
 # OS files
 .DS_Store

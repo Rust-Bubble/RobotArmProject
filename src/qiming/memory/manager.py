@@ -24,9 +24,11 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import SQLAlchemyError
 
 from src.qiming.database.connection import db_manager
 from src.qiming.database.models import ConversationMessage, ConversationSession
+from src.qiming.utils.retry import retry_async
 
 logger = logging.getLogger(__name__)
 
@@ -158,22 +160,29 @@ class MemoryManager:
 
         进程内历史由 Orchestrator 维护，这里只负责落库；
         落库失败只记日志，不影响本轮对话正常返回。
+        遇到 SQLite 锁竞争 / 连接闪断时自动按指数退避重试。
         """
-        async with db_manager.session() as session:
-            session.add(
-                ConversationMessage(session_id=session_id, role="user", content=user_text)
-            )
-            session.add(
-                ConversationMessage(
-                    session_id=session_id, role="agent", content=reply, agent=agent
+
+        async def _write() -> None:
+            async with db_manager.session() as session:
+                session.add(
+                    ConversationMessage(session_id=session_id, role="user", content=user_text)
                 )
-            )
-            await session.execute(
-                update(ConversationSession)
-                .where(ConversationSession.id == session_id)
-                .values(updated_at=_utcnow())
-            )
-            await session.commit()
+                session.add(
+                    ConversationMessage(
+                        session_id=session_id, role="agent", content=reply, agent=agent
+                    )
+                )
+                await session.execute(
+                    update(ConversationSession)
+                    .where(ConversationSession.id == session_id)
+                    .values(updated_at=_utcnow())
+                )
+                await session.commit()
+
+        await retry_async(
+            _write, retries=3, base_delay=0.3, exceptions=(SQLAlchemyError, OSError)
+        )
         logger.debug("会话 %s 已持久化一轮对话", session_id)
 
     async def close(self) -> None:

@@ -13,9 +13,10 @@
 后端 -> 前端 (事件流，见 Orchestrator.handle):
     {"type": "history",      "session_id": "...", "messages": [{role, text, agent}, ...]}
     {"type": "robot_status", "state": "busy", "phase": "...", ...}
-    {"type": "status",       "stage": "...", "message": "..."}
+    {"type": "status",       "stage": "intent", "message": "..."}
     {"type": "intent",       "intent": "动作指令", "agent": "action"}
     {"type": "agent_start",  "agent": "action"}
+    {"type": "step",         "index": 1, "total": 2, "action_type": "grasp", "target_object": "水杯"}
     {"type": "tool_result",  "tool": "execute_grasp", "ok": true, "result": {...}}
     {"type": "command_result", "ok": true, "action": "move", ...}   # 坐标指令执行结果
     {"type": "agent_result", "agent": "action", "message": "...", "task": {...}}
@@ -25,7 +26,10 @@
 
 连接建立后会先推送一条 robot_status 快照和一条 history 消息（由全局上下文
 管理器 MemoryManager 从数据库恢复该用户最近的会话），供前端初始化。
+断线重连：前端重连后后端会重新推送历史与状态快照，会话上下文不丢失。
 """
+
+from __future__ import annotations
 
 import logging
 
@@ -52,6 +56,7 @@ def _build_orchestrator():
     try:
         mode = load_yaml("config/llm.yaml")["llm"].get("mode", "mock")
     except Exception:  # noqa: BLE001 - 配置缺失时退回 mock，保证服务可启动
+        logger.warning("config/llm.yaml 读取失败，回退到 mock 调度器")
         mode = "mock"
     if mode == "real":
         return Orchestrator()
@@ -83,7 +88,10 @@ async def _push_history(websocket: WebSocket, memory: SessionMemory) -> None:
 async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
     user = await _authenticate(token)
     if user is None:
-        # 4401: 自定义关闭码，前端据此跳转登录
+        # 必须先 accept 再携带 4401 关闭：uvicorn 等服务器对"accept 之前 close"
+        # 会直接以 HTTP 403 拒绝握手，浏览器拿不到 4401 关闭码，无法区分
+        # "token 失效"和"网络故障"，会导致前端无限重连
+        await websocket.accept()
         await websocket.close(code=4401)
         return
 
@@ -93,18 +101,33 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
     orchestrator = _build_orchestrator()
     memory = await memory_manager.get_session(user.id)
     orchestrator.history = memory.history
+    logger.info("用户 %s 的 WebSocket 已连接（会话 %s）", user.id, memory.session_id)
 
     # 先推一条机械臂状态快照，让前端状态卡片在连接建立时就有内容
     await websocket.send_json({"type": "robot_status", **status_hub.snapshot()})
     # 再推一条会话历史，让前端恢复之前的对话
     await _push_history(websocket, memory)
 
+    async def _send(event: dict) -> bool:
+        """发送事件；连接已断开时返回 False 而不是抛异常。"""
+        try:
+            await websocket.send_json(event)
+            return True
+        except Exception:  # noqa: BLE001 - 断线后发送失败属正常流程
+            return False
+
     try:
         while True:
-            data = await websocket.receive_json()
+            try:
+                data = await websocket.receive_json()
+            except ValueError:
+                # 非 JSON 消息：提示前端但不断开连接
+                logger.warning("收到非 JSON 消息，已忽略")
+                await _send({"type": "error", "message": "消息必须是 JSON 格式"})
+                continue
 
             if data.get("type") == "ping":
-                await websocket.send_json({"type": "pong"})
+                await _send({"type": "pong"})
                 continue
 
             if data.get("type") == "new_session":
@@ -119,15 +142,19 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
                 # 执行期间同样把机械臂状态实时推给前端
                 command = data.get("command") or {}
                 holder: dict = {}
-                async for event in run_with_status_events(
-                    get_coordinate_gateway().submit, holder, command
-                ):
-                    await websocket.send_json(event)
-                await websocket.send_json(
-                    {"type": "command_result", **holder["result"]})
+                try:
+                    async for event in run_with_status_events(
+                        get_coordinate_gateway().submit, holder, command
+                    ):
+                        await _send(event)
+                    await _send({"type": "command_result", **holder["result"]})
+                except Exception as exc:  # noqa: BLE001 - 单条指令失败不影响连接
+                    logger.exception("坐标指令执行失败: %s", command)
+                    await _send({"type": "error", "message": f"坐标指令执行失败: {exc}"})
                 continue
 
             if data.get("type") != "text":
+                # 未知的消息类型直接忽略（与既有约定一致，兼容前端旧版本）
                 continue
 
             content = str(data.get("content") or "").strip()
@@ -147,11 +174,15 @@ async def chat_ws(websocket: WebSocket, token: str = Query(default="")):
                             memory.session_id, content, reply, agent_name or None)
                     except Exception:  # noqa: BLE001
                         logger.exception("会话 %s 持久化对话失败", memory.session_id)
-                await websocket.send_json(event)
+                if not await _send(event):
+                    # 发送失败说明前端已断开，结束本轮循环去走重连恢复流程
+                    break
     except WebSocketDisconnect:
-        pass
-    except Exception as exc:  # noqa: BLE001 - 单轮异常不断开连接，向前端报错
+        logger.info("用户 %s 的 WebSocket 已断开（会话 %s）", user.id, memory.session_id)
+    except Exception:
+        # 连接级异常：记录完整堆栈，向前端报错后关闭，等待前端自动重连
+        logger.exception("用户 %s 的 WebSocket 发生异常", user.id)
         try:
-            await websocket.send_json({"type": "error", "message": f"服务内部错误: {exc}"})
-        except Exception:  # noqa: BLE001
+            await websocket.close(code=1011)
+        except Exception:  # noqa: BLE001 - 连接可能已经断开
             pass
