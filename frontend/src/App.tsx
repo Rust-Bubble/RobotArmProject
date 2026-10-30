@@ -225,7 +225,10 @@ export default function App() {
         // token 失效，回到登录页
         clearToken();
         setAuthed(false);
+        return;
       }
+      // 非鉴权原因断开：ChatClient 会自动重连，这里把关闭码暴露出来便于定位
+      setNotice(`与后端断开（code ${code}），正在自动重连…`);
     },
     [],
   );

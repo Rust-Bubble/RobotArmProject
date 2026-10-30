@@ -41,9 +41,10 @@ class Orchestrator:
     ) -> None:
         self.recognizer = recognizer or MllmRecognizer()
         self.tool_registry = tool_registry or create_default_registry()
-        # 按意图类型（AGENT_MAP 的 key）索引子 Agent，分发时用意图直接查表
+        # 按意图类型（AGENT_MAP 的 key）索引子 Agent，分发时用意图直接查表；
+        # 工具注册表一同注入，供 Agent 通过 Function Calling 自主调用
         self.agents: dict[str, BaseAgent] = {
-            intent: agent_cls(recognizer=self.recognizer)
+            intent: agent_cls(recognizer=self.recognizer, tool_registry=self.tool_registry)
             for intent, agent_cls in AGENT_MAP.items()
         }
         # 闲聊兜底也复用 ChatAgent
@@ -83,40 +84,36 @@ class Orchestrator:
             "message": f"正在由 {agent.name} agent 处理…",
         }
 
+        # Agent 内部由模型自主决定调用哪些工具，这里只负责在动作执行期间
+        # 把机械臂状态实时转成事件，并在迭代结束后取回调用记录
         try:
-            result = await asyncio.to_thread(agent.run, user_text, self.history)
+            holder: dict[str, Any] = {}
+            async for event in run_with_status_events(
+                agent.run, holder, user_text, self.history
+            ):
+                yield event
+            result = holder["result"]
         except Exception as exc:  # noqa: BLE001
             yield {"type": "error", "message": f"{agent.name} agent 处理失败: {exc}"}
             yield {"type": "done"}
             return
 
-        # 子 Agent 产出结构化任务时，按步骤依次分发到对应的外部系统工具
-        task = result["task"]
-        tool_calls = self._tool_calls_for_task(task)
-        is_plan = bool(task and task.get("type") == "plan")
-        steps = task.get("steps", []) if is_plan else []
-
-        tool_results: list[dict] = []
-        for idx, (tool_name, tool_args) in enumerate(tool_calls, start=1):
-            if is_plan:
-                step = steps[idx - 1] if idx - 1 < len(steps) else {}
-                yield {
-                    "type": "step",
-                    "index": idx,
-                    "total": len(tool_calls),
-                    "action_type": step.get("action_type", ""),
-                    "target_object": step.get("target_object", ""),
-                    "message": step.get("reply", ""),
-                }
-            holder: dict[str, Any] = {}
-            async for event in run_with_status_events(
-                self.tool_registry.execute, holder, tool_name, tool_args
-            ):
-                yield event
-            tool_results.append(holder["result"])
-            yield {"type": "tool_result", "tool": tool_name, **holder["result"]}
-
-        tool_result = tool_results if is_plan else (tool_results[0] if tool_results else None)
+        # 模型自主调用产生的工具结果，按调用顺序回传前端
+        traces: list[dict] = result.get("tool_traces") or []
+        tool_result = None
+        for trace in traces:
+            event: dict[str, Any] = {
+                "type": "tool_result",
+                "tool": trace.get("tool", ""),
+                "ok": bool(trace.get("ok")),
+            }
+            if trace.get("ok"):
+                event["result"] = trace.get("result")
+            else:
+                event["error"] = trace.get("error")
+            yield event
+        if traces:
+            tool_result = traces if len(traces) > 1 else traces[0]
 
         self.history.append({"role": "user", "text": user_text})
         self.history.append({"role": "agent", "text": result["message"]})
@@ -125,7 +122,7 @@ class Orchestrator:
             "type": "agent_result",
             "agent": agent.name,
             "message": result["message"],
-            "task": result["task"],
+            "task": result.get("task"),
             "tool_result": tool_result,
         }
         yield {"type": "done"}

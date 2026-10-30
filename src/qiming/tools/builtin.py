@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from src.qiming.arm_control.controller import ArmController
 from src.qiming.arm_control.gateway import CoordinateGateway
+from src.qiming.arm_control.motion_scripts import list_scripts
 from src.qiming.arm_control.pose_presets import (
     DEFAULT_PLACE_PRESET_NAME,
     DEFAULT_PRESET_NAME,
@@ -187,6 +188,39 @@ def create_default_registry() -> ToolRegistry:
         if command_id:
             command["command_id"] = command_id
         return get_coordinate_gateway().submit(command)
+
+    @registry.tool(
+        name="list_motion_scripts",
+        description="列出所有预设机械臂运动脚本（不含视觉，只有运动与夹爪开合）。",
+        parameters={"type": "object", "properties": {}, "required": []},
+    )
+    def list_motion_scripts() -> list[dict]:
+        return [
+            {"name": s.name, "label": s.label, "description": s.description,
+             "steps": len(s.steps)}
+            for s in list_scripts()
+        ]
+
+    @registry.tool(
+        name="run_motion_script",
+        description="按名称执行预设机械臂运动脚本（纯运动与夹爪开合，不需要视觉坐标）。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "脚本名称，可先调用 list_motion_scripts 获取",
+                },
+            },
+            "required": ["name"],
+        },
+    )
+    def run_motion_script(name: str) -> dict:
+        try:
+            return _get_arm_controller().run_motion_script(name)
+        except KeyError as exc:
+            # 转成模型/用户可读的参数错误
+            raise ValueError(str(exc).strip("'\"")) from None
 
     # ---------- 语音反馈 ----------
     @registry.tool(

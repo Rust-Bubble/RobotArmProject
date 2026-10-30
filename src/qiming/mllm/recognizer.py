@@ -69,8 +69,14 @@ class MllmRecognizer:
         userInfo: str,
         imageInfo: ImageFrame | str | Path | Any = None,
         responseForm: type[BaseModel] | None = None,
+        tools: list | None = None,
     ) -> Any:
-        """Invoke the configured chat model with text and an optional image."""
+        """Invoke the configured chat model with text, an optional image, and tools.
+
+        tools 传入 langchain StructuredTool 列表时，create_agent 会自行完成
+        「模型决策 -> 调用工具 -> 结果回填 -> 继续推理」的循环，
+        因此调用方不需要再做关键词路由。
+        """
         qwen_model = init_chat_model(
             model=model_type or self.model_name,
             model_provider="openai",
@@ -82,6 +88,7 @@ class MllmRecognizer:
             model=qwen_model,
             system_prompt=system_prompt,
             response_format=responseForm,
+            tools=tools or [],
         )
 
         content: list[dict[str, Any]] = [{"type": "text", "text": userInfo}]
@@ -94,7 +101,10 @@ class MllmRecognizer:
 
         response = agent.invoke({"messages": [{"role": "user", "content": content}]})
         if responseForm:
-            return response["structured_response"]
+            structured = response.get("structured_response")
+            if structured is None:
+                raise RuntimeError("MLLM 未返回结构化结果（模型可能只调用了工具）")
+            return structured
 
         messages = response.get("messages", [])
         for message in reversed(messages):
@@ -136,7 +146,11 @@ class MllmRecognizer:
     def tendRecognizer(self, userInfo: str) -> str:
         """Classify text as chat, system, or action intent."""
         system_prompt = """
-        请判断用户消息属于以下哪种意图：闲聊、系统指令、动作指令或其他。
-        只返回一个意图名称，不要添加解释。
+        请判断用户消息属于以下哪种意图，只返回一个意图名称，不要添加解释：
+        - 闲聊：打招呼、询问身份、闲聊、与机械臂动作无关的问题。
+        - 系统指令：查询机械臂状态、紧急停止、急停、系统复位、重启。
+        - 动作指令：抓取、拿取、递送、放置、移动等让机械臂执行物体的操作。
+        - 其他：无法归入以上三类。
+        只返回这四个词之一：闲聊 / 系统指令 / 动作指令 / 其他。
         """
         return str(self.agentCommunication(self.model_name, system_prompt, userInfo)).strip()

@@ -92,11 +92,19 @@ export class ChatClient {
     this.openSocket();
   }
 
-  private openSocket(): void {
+  /** 连接地址：本地开发（vite 5173）直连后端 8000，绕过 dev server 的 WS 代理 */
+  private resolveUrl(): string {
     const scheme = window.location.protocol === "https:" ? "wss" : "ws";
-    this.ws = new WebSocket(
-      `${scheme}://${window.location.host}/ws/chat?token=${encodeURIComponent(this.token)}`,
-    );
+    const { hostname, port, host } = window.location;
+    const query = `?token=${encodeURIComponent(this.token)}`;
+    const isLocalDev =
+      (hostname === "127.0.0.1" || hostname === "localhost") && port === "5173";
+    if (isLocalDev) return `${scheme}://${hostname}:8000/ws/chat${query}`;
+    return `${scheme}://${host}/ws/chat${query}`;
+  }
+
+  private openSocket(): void {
+    this.ws = new WebSocket(this.resolveUrl());
     this.ws.onopen = () => {
       this.attempts = 0;
       this.startHeartbeat();

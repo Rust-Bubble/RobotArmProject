@@ -20,36 +20,29 @@ def collect_events(orchestrator, text: str) -> list[dict]:
 
 
 class FakeRecognizer:
-    """替身 Recognizer：意图识别与 Agent 调用都返回预设值。"""
+    """替身 Recognizer：意图识别返回预设值，并模拟模型自主调用工具。
 
-    def __init__(self, intent: str = "闲聊") -> None:
+    Function Calling 架构下工具由 create_agent 自主调用；测试用 tool_calls
+    预设「模型决定调用哪些工具」，再通过 StructuredTool.invoke 真实执行，
+    因此仍覆盖参数 schema 校验与 trace 记录。
+    """
+
+    def __init__(self, intent: str = "闲聊", tool_calls: list | None = None) -> None:
         self.intent = intent
-        self.last_response_form = None
+        self.tool_calls = tool_calls or []
+        self.last_tools: list[str] = []
 
     def tendRecognizer(self, user_text: str) -> str:
         return self.intent
 
-    def agentCommunication(self, model, system_prompt, userInfo, imageInfo=None, responseForm=None):
-        self.last_response_form = responseForm
-        if responseForm is not None:
-            name = getattr(responseForm, "__name__", "")
-            if name == "DecomposePlan":
-                return responseForm(
-                    steps=[
-                        ActionPlan(action_type="抓取", target_object="苹果", params={}, reply="抓取苹果"),
-                        ActionPlan(action_type="放置", target_object="杯子", params={}, reply="放置杯子"),
-                    ],
-                    reply="好的，将依次执行这些动作",
-                )
-            if name == "ActionPlan":
-                return responseForm(
-                    action_type="抓取",
-                    target_object="水杯",
-                    params={},
-                    reply="好的，正在为您拿取水杯",
-                )
-            return responseForm(command="查询状态", reply="正在查询机械臂状态")
-        return "这是一条闲聊回复"
+    def agentCommunication(self, model, system_prompt, userInfo, imageInfo=None,
+                           responseForm=None, tools=None):
+        self.last_tools = [t.name for t in (tools or [])]
+        by_name = {t.name: t for t in (tools or [])}
+        for name, args in self.tool_calls:
+            if name in by_name:
+                by_name[name].invoke(args)
+        return "好的，已执行"
 
 
 class TestMockOrchestrator:
@@ -140,18 +133,24 @@ class TestMockOrchestrator:
 
 class TestOrchestrator:
     def test_real_orchestrator_dispatch_by_intent(self):
-        """意图识别 -> 子 Agent -> 工具分发 全链路（假 Recognizer）。"""
-        recognizer = FakeRecognizer(intent="系统指令")
+        """意图识别 -> 子 Agent -> 模型自主调用工具 全链路（假 Recognizer）。"""
+        recognizer = FakeRecognizer(
+            intent="系统指令", tool_calls=[("query_robot_status", {})])
         orch = Orchestrator(recognizer=recognizer)
         events = collect_events(orch, "现在什么状态")
 
         assert events[1]["intent"] == "系统指令"
         assert events[1]["agent"] == "system"
+        # SystemAgent 只向模型暴露系统类工具
+        assert set(recognizer.last_tools) == {
+            "query_robot_status", "emergency_stop", "reset_system"}
+
         tool_event = next(e for e in events if e["type"] == "tool_result")
         assert tool_event["tool"] == "query_robot_status"
         assert tool_event["ok"] is True
+
         agent_result = next(e for e in events if e["type"] == "agent_result")
-        assert agent_result["task"]["type"] == "system"
+        assert agent_result["task"]["action_type"] == "query_robot_status"
 
     def test_real_orchestrator_unknown_intent_falls_back_to_chat(self):
         recognizer = FakeRecognizer(intent="其他")
@@ -207,22 +206,40 @@ class TestOrchestrator:
         assert Orchestrator._tool_calls_for_task({"type": "chat"}) == []
 
     def test_real_orchestrator_decomposes_complex_action(self):
-        recognizer = FakeRecognizer(intent="动作指令")
+        recognizer = FakeRecognizer(
+            intent="动作指令",
+            tool_calls=[
+                ("execute_grasp", {"object_name": "苹果"}),
+                ("execute_grasp", {"object_name": "杯子"}),
+            ],
+        )
         orch = Orchestrator(recognizer=recognizer)
         events = collect_events(orch, "先把苹果拿过来，再把杯子放到桌上")
 
         assert events[1]["intent"] == "动作指令"
         assert events[1]["agent"] == "decompose"
-
-        steps = [e for e in events if e["type"] == "step"]
-        assert len(steps) == 2
+        # DecomposeAgent 暴露机械臂动作类工具与预设脚本工具
+        assert set(recognizer.last_tools) == {
+            "execute_grasp", "execute_coords", "list_motion_scripts", "run_motion_script"}
 
         tool_events = [e for e in events if e["type"] == "tool_result"]
         assert len(tool_events) == 2
         assert all(e["tool"] == "execute_grasp" for e in tool_events)
+        assert all(e["ok"] is True for e in tool_events)
 
         result = next(e for e in events if e["type"] == "agent_result")
-        assert result["task"]["type"] == "plan"
-        assert len(result["task"]["steps"]) == 2
         assert isinstance(result["tool_result"], list)
         assert len(result["tool_result"]) == 2
+
+    def test_real_orchestrator_chat_agent_only_reads_script_list(self):
+        recognizer = FakeRecognizer(
+            intent="闲聊", tool_calls=[("list_motion_scripts", {})])
+        orch = Orchestrator(recognizer=recognizer)
+        events = collect_events(orch, "你有哪些脚本")
+
+        # 闲聊 Agent 只暴露只读的脚本列表工具，不能执行动作
+        assert recognizer.last_tools == ["list_motion_scripts"]
+
+        tool_event = next(e for e in events if e["type"] == "tool_result")
+        assert tool_event["tool"] == "list_motion_scripts"
+        assert tool_event["ok"] is True
