@@ -32,6 +32,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
@@ -41,6 +42,7 @@ from src.qiming.arm_control.status import status_hub
 from src.qiming.database.connection import db_manager
 from src.qiming.database.models import User
 from src.qiming.memory.manager import SessionMemory, memory_manager
+from src.qiming.mllm.recognizer import MllmRecognizer
 from src.qiming.orchestrator.orchestrator import MockOrchestrator, Orchestrator
 from src.qiming.tools.builtin import get_coordinate_gateway
 from src.qiming.utils.async_utils import run_with_status_events
@@ -52,14 +54,20 @@ router = APIRouter(tags=["chat"])
 
 
 def _build_orchestrator():
-    """根据 config/llm.yaml 的 mode 决定用真实 MLLM 调度器还是本地 mock 调度器。"""
+    """根据 config/llm.yaml 的 mode 决定用真实 MLLM 调度器还是本地 mock 调度器。
+
+    环境变量 LLM_MODE 可覆盖配置（测试用它强制 mock，避免真实模型的不确定性）。
+    """
     try:
-        mode = load_yaml("config/llm.yaml")["llm"].get("mode", "mock")
+        llm_cfg = load_yaml("config/llm.yaml")["llm"]
     except Exception:  # noqa: BLE001 - 配置缺失时退回 mock，保证服务可启动
         logger.warning("config/llm.yaml 读取失败，回退到 mock 调度器")
-        mode = "mock"
+        llm_cfg = {}
+    mode = os.getenv("LLM_MODE") or llm_cfg.get("mode", "mock")
     if mode == "real":
-        return Orchestrator()
+        # 把 endpoint / model_name / timeout 传给识别器；
+        # 缺省项回落到 src/qiming/mllm/.env 中的 DASHSCOPE_* 配置
+        return Orchestrator(recognizer=MllmRecognizer(llm_cfg))
     return MockOrchestrator()
 
 
