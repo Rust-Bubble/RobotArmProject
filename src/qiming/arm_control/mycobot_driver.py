@@ -16,7 +16,17 @@ class MyCobotDriver:
         self.port = robot_cfg.get("port", PI_PORT)
         self.baudrate = robot_cfg.get("baudrate", 115200)
         self.default_speed = robot_cfg.get("default_speed", 35)
+        # 坐标运动模式：1 - 直线运动（send_coords/sync_send_coords 的 mode=1），0 - 非线性
+        self.coord_mode = robot_cfg.get("coord_mode", 1)
+        # 同步运动等待超时（sync_send_coords/sync_send_angles 的 timeout 参数）
+        self.move_timeout = robot_cfg.get("move_timeout", 15)
         self.gripper_config = robot_cfg.get("gripper", {})
+        # 夹爪类型：1 自适应（默认）/ 2 五指灵巧手 / 3 平行 / 4 柔性
+        self.gripper_type = self.gripper_config.get("type", 1)
+        self.gripper_open_value = self.gripper_config.get("open_value", 80)
+        self.gripper_close_value = self.gripper_config.get("close_value", 20)
+        self.gripper_open_speed = self.gripper_config.get("open_speed", 50)
+        self.gripper_close_speed = self.gripper_config.get("close_speed", 30)
         self.mc = None
 
         # 逆运动学求解器：优先使用固件自带解算，无硬件时回退到本地算法
@@ -31,19 +41,40 @@ class MyCobotDriver:
     def _connect(self) -> None:
         try:
             self.mc = MyCobot320(self.port, self.baudrate)
+            # 0 = 插补模式，指令按队列顺序执行，避免新指令打断正在执行的轨迹
             self.mc.set_fresh_mode(0)
+            if self.mc.is_power_on() != 1:
+                print("[机械臂] 未上电，尝试 power_on()")
+                self.mc.power_on()
             print(f"机械臂连接成功: {self.port} @ {self.baudrate}")
         except Exception as e:
             print(f"机械臂连接失败: {str(e)}")
             self.mc = None
 
+    def _check_error(self) -> None:
+        """运动前检查固件错误码（1~6 关节超限、16~19 碰撞、32 逆解无解、33~34 直线无相邻解）。"""
+        if self.mc is None:
+            return
+        try:
+            code = self.mc.get_error_information()
+            if code not in (None, 0):
+                print(f"[机械臂] 固件错误码 {code}，建议先排查/clear_error_information()")
+        except Exception as e:
+            print(f"[机械臂] 读取错误信息失败: {e}")
+
     def move_to(self, pose: Pose) -> None:
         if self.mc is None:
             print("[机械臂] 未连接，跳过移动")
             return
-        x, y, z, rx, ry, rz = pose
-        self.mc.send_coords([x, y, z, rx, ry, rz], self.default_speed)
-        time.sleep(2)
+        self._check_error()
+        coords = self.clamp_coords(pose)
+        try:
+            # 同步发送坐标：到达目标点或超时后才返回，替代固定 sleep
+            self.mc.sync_send_coords(
+                coords, self.default_speed, self.coord_mode, self.move_timeout)
+        except Exception as e:
+            print(f"[机械臂] 移动失败({e})，回退到异步 send_coords")
+            self.mc.send_coords(coords, self.default_speed, self.coord_mode)
 
     # ==================== 运动学: 位姿 <-> 关节角度 ====================
     def get_angles(self) -> list:
@@ -89,12 +120,17 @@ class MyCobotDriver:
         return self.kinematics.joints_to_pose(joints)
 
     def move_to_joints(self, joints: list, speed: int = None) -> None:
-        """按关节角度移动机械臂。"""
+        """按关节角度移动机械臂（同步等待到位）。"""
         if self.mc is None:
             print(f"[机械臂] 未连接，跳过关节移动: {[round(v, 2) for v in joints]}")
             return
-        self.mc.send_angles(list(joints), speed or self.default_speed)
-        time.sleep(2)
+        self._check_error()
+        speed = speed or self.default_speed
+        try:
+            self.mc.sync_send_angles(list(joints), speed, self.move_timeout)
+        except Exception as e:
+            print(f"[机械臂] 关节移动失败({e})，回退到异步 send_angles")
+            self.mc.send_angles(list(joints), speed)
 
     def move_to_by_ik(self, pose: Pose, speed: int = None) -> bool:
         """先做逆运动学转换，再以关节角度方式移动。"""
@@ -106,31 +142,48 @@ class MyCobotDriver:
         self.move_to_joints(joints, speed)
         return True
 
+    def _init_gripper(self) -> None:
+        """夹爪初始化：透明传输模式 + 电动夹爪初始化（插入/移除夹爪后需初始化一次）。"""
+        self.mc.set_gripper_mode(0)
+        try:
+            self.mc.init_electric_gripper()
+        except Exception as e:
+            print(f"[机械臂] 夹爪初始化失败: {e}")
+
     def open_gripper(self) -> None:
         if self.mc is None:
             print("[机械臂] 未连接，跳过打开夹爪")
             return
         try:
-            self.mc.set_gripper_mode(0)
-            self.mc.init_electric_gripper()
-            self.mc.set_gripper_state(0, 50, 4)
-            time.sleep(0.5)
+            self._init_gripper()
+            # 优先按开合度（0~100，越大越开）控制，失败时回退到状态位
+            self.mc.set_gripper_value(
+                self.gripper_open_value, self.gripper_open_speed, self.gripper_type)
+            time.sleep(0.8)
             print("[机械臂] 打开夹爪")
         except Exception as e:
-            print(f"打开夹爪失败: {str(e)}")
+            print(f"打开夹爪失败({e})，回退 set_gripper_state")
+            try:
+                self.mc.set_gripper_state(0, self.gripper_open_speed, self.gripper_type)
+            except Exception as e2:
+                print(f"打开夹爪仍失败: {e2}")
 
     def close_gripper(self) -> None:
         if self.mc is None:
             print("[机械臂] 未连接，跳过闭合夹爪")
             return
         try:
-            self.mc.set_gripper_mode(0)
-            self.mc.init_electric_gripper()
-            self.mc.set_gripper_state(1, 30, 4)
+            self._init_gripper()
+            self.mc.set_gripper_value(
+                self.gripper_close_value, self.gripper_close_speed, self.gripper_type)
             time.sleep(1.0)
             print("[机械臂] 闭合夹爪")
         except Exception as e:
-            print(f"闭合夹爪失败: {str(e)}")
+            print(f"闭合夹爪失败({e})，回退 set_gripper_state")
+            try:
+                self.mc.set_gripper_state(1, self.gripper_close_speed, self.gripper_type)
+            except Exception as e2:
+                print(f"闭合夹爪仍失败: {e2}")
 
     def get_end2base_matrix(self, use_actual_robot=True):
         def euler_to_rotation_matrix(rx, ry, rz, degrees=True):
@@ -187,13 +240,12 @@ class MyCobotDriver:
             print("[机械臂] 未连接，跳过夹爪测试")
             return False
         try:
-            self.mc.set_gripper_mode(0)
-            self.mc.init_electric_gripper()
+            self._init_gripper()
 
             for i in range(2):
-                self.mc.set_gripper_state(1, 100, 4)
+                self.mc.set_gripper_state(1, 100, self.gripper_type)
                 time.sleep(1)
-                self.mc.set_gripper_state(0, 100, 4)
+                self.mc.set_gripper_state(0, 100, self.gripper_type)
                 time.sleep(1)
 
             return True
@@ -206,8 +258,7 @@ class MyCobotDriver:
             print("[机械臂] 未连接，跳过归零")
             return
         print('机械臂归零')
-        self.mc.send_angles([0, 0, 0, 0, 0, 0], 40)
-        time.sleep(3)
+        self.mc.sync_send_angles([0, 0, 0, 0, 0, 0], 40, self.move_timeout)
 
     def relax_arms(self):
         if self.mc is None:
@@ -221,8 +272,8 @@ class MyCobotDriver:
             print("[机械臂] 未连接，跳过移动")
             return
         print('移动至指定坐标：X {} Y {}'.format(X, Y))
-        self.mc.send_coords([X, Y, HEIGHT_SAFE, 0, 180, 90], 20)
-        time.sleep(4)
+        self.mc.sync_send_coords(
+            [X, Y, HEIGHT_SAFE, 0, 180, 90], 20, self.coord_mode, self.move_timeout)
 
     def single_joint_move(self, joint_index, angle):
         if self.mc is None:
@@ -237,8 +288,7 @@ class MyCobotDriver:
             print("[机械臂] 未连接，跳过俯视姿态")
             return
         print('移动至俯视姿态')
-        self.mc.send_angles([-62.13, 8.96, -87.71, -14.41, 2.54, -16.34], 10)
-        time.sleep(3)
+        self.mc.sync_send_angles([-62.13, 8.96, -87.71, -14.41, 2.54, -16.34], 10, self.move_timeout)
 
     def grab_and_place(self, grab_point, place_point):
         if self.mc is None:
@@ -247,44 +297,27 @@ class MyCobotDriver:
 
         init_angles = [0, 0, 0, 0, 0, 0]
 
-        self.mc.set_gripper_mode(0)
-        self.mc.init_electric_gripper()
-        self.mc.set_gripper_state(0, 50, 4)
-        time.sleep(1)
+        self.open_gripper()
 
-        self.mc.send_angles(init_angles, 50)
-        time.sleep(2)
+        self.mc.sync_send_angles(init_angles, 50, self.move_timeout)
 
-        self.mc.send_coords([grab_point[0], grab_point[1], grab_point[2] + 70,
-                             grab_point[3], grab_point[4], grab_point[5]], 50, 1)
-        time.sleep(2)
+        self.move_to((grab_point[0], grab_point[1], grab_point[2] + 70,
+                      grab_point[3], grab_point[4], grab_point[5]))
+        self.move_to(tuple(grab_point))
 
-        self.mc.send_coords(grab_point, 30, 1)
-        time.sleep(2)
+        self.close_gripper()
 
-        self.mc.set_gripper_state(1, 30, 4)
-        time.sleep(1.5)
+        self.move_to((grab_point[0], grab_point[1], grab_point[2] + 70,
+                      grab_point[3], grab_point[4], grab_point[5]))
+        self.move_to((place_point[0], place_point[1], place_point[2] + 70,
+                      place_point[3], place_point[4], place_point[5]))
+        self.move_to(tuple(place_point))
 
-        self.mc.send_coords([grab_point[0], grab_point[1], grab_point[2] + 70,
-                             grab_point[3], grab_point[4], grab_point[5]], 40, 1)
-        time.sleep(2)
+        self.open_gripper()
 
-        self.mc.send_coords([place_point[0], place_point[1], place_point[2] + 70,
-                             place_point[3], place_point[4], place_point[5]], 50, 1)
-        time.sleep(2)
-
-        self.mc.send_coords(place_point, 30, 1)
-        time.sleep(2)
-
-        self.mc.set_gripper_state(0, 30, 4)
-        time.sleep(1.5)
-
-        self.mc.send_coords([place_point[0], place_point[1], place_point[2] + 70,
-                             place_point[3], place_point[4], place_point[5]], 40, 1)
-        time.sleep(2)
-
-        self.mc.send_angles(init_angles, 50)
-        time.sleep(2)
+        self.move_to((place_point[0], place_point[1], place_point[2] + 70,
+                      place_point[3], place_point[4], place_point[5]))
+        self.mc.sync_send_angles(init_angles, 50, self.move_timeout)
 
     def clamp_coords(self, coords):
         x, y, z, rx, ry, rz = coords

@@ -4,14 +4,23 @@ robot:
   port: "/dev/ttyAMA0"
   baudrate: 1000000
   default_speed: 35
+  # 坐标运动模式：1 直线运动（sync_send_coords 的 mode=1），0 非线性（默认）
+  coord_mode: 1
+  # 同步发送坐标/角度后等待到位的超时时间（秒），超时后不再阻塞
+  move_timeout: 15
   handover_coords: [80.0, -220.0, 180.0, 0.0, 0.0, 0.0]
   # 抓取时使用的末端姿态预设，见 src/qiming/arm_control/pose_presets.py
   grasp_preset: "top_down"
   # 放置/递送时使用的末端姿态预设
   place_preset: "top_down_place"
   gripper:
+    # 夹爪类型：1 自适应 / 2 五指灵巧手 / 3 平行 / 4 柔性
+    type: 4
+    # 开合度（0~100，值越大越张开）
     open_value: 80
     close_value: 20
+    open_speed: 50
+    close_speed: 30
   # 逆运动学参数（改进 DH, 单位: deg / mm），留空则使用 kinematics.py 中的 myCobot 320 默认值
   kinematics:
     dh_params:
