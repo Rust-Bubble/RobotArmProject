@@ -30,6 +30,21 @@ export function getStoredToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+/** 检查存储的 access token 是否已过期（本地解析 JWT exp，不发请求）。 */
+export function isStoredTokenExpired(): boolean {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return true;
+  try {
+    // JWT 第二段是 payload（base64url），解码后读 exp（秒级时间戳）
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    if (typeof payload.exp !== "number") return true;
+    // 提前 30 秒视为过期，留出时钟偏差余量
+    return Date.now() / 1000 >= payload.exp - 30;
+  } catch {
+    return true;
+  }
+}
+
 export function storeToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
 }

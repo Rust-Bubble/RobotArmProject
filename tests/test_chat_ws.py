@@ -45,7 +45,10 @@ def token(client):
 
 
 def recv_initial_status(ws) -> dict:
-    """连接建立后后端会先推送机械臂状态快照和会话历史，供前端初始化。"""
+    """连接建立后后端会先推送机械臂状态快照和会话历史，供前端初始化。
+
+    消费并返回 history 事件（多数用例只把它当同步栅栏用）。
+    """
     snapshot = ws.receive_json()
     assert snapshot["type"] == "robot_status"
     assert snapshot["state"] in {"idle", "busy", "estop"}
@@ -53,19 +56,23 @@ def recv_initial_status(ws) -> dict:
     history = ws.receive_json()
     assert history["type"] == "history"
     assert "session_id" in history and "messages" in history
-    return snapshot
+    return history
 
 
 class TestWsAuth:
     def test_invalid_token_rejected(self, client):
-        # 4401 是约定好的"未认证"关闭码，前端据此跳转登录
+        # 4401 是约定好的"未认证"关闭码，前端据此跳转登录。
+        # 后端先 accept 再 close(4401)，断开在第一次接收时才暴露给客户端
         with pytest.raises(WebSocketDisconnect) as exc_info:
-            client.websocket_connect("/ws/chat?token=bad.token.here").__enter__()
+            with client.websocket_connect("/ws/chat?token=bad.token.here") as ws:
+                ws.receive_json()
         assert exc_info.value.code == 4401
 
     def test_missing_token_rejected(self, client):
-        with pytest.raises(WebSocketDisconnect):
-            client.websocket_connect("/ws/chat").__enter__()
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect("/ws/chat") as ws:
+                ws.receive_json()
+        assert exc_info.value.code == 4401
 
 
 class TestWsChat:
@@ -144,3 +151,31 @@ class TestWsChat:
             ws.send_json({"type": "ping"})
             # 非法消息被忽略，不影响后续心跳
             assert ws.receive_json() == {"type": "pong"}
+
+    def test_non_json_message_does_not_kill_connection(self, client, token):
+        # 非 JSON 消息只返回一条 error 事件，连接保持可用
+        with client.websocket_connect(f"/ws/chat?token={token}") as ws:
+            recv_initial_status(ws)
+            ws.send_text("这不是 JSON")
+            assert ws.receive_json()["type"] == "error"
+            ws.send_json({"type": "ping"})
+            assert ws.receive_json() == {"type": "pong"}
+
+    def test_reconnect_restores_history(self, client, token):
+        # 断线重连场景：第一轮对话落库后断开，重连应恢复同一会话的历史。
+        # 注意 recv_initial_status 会同时消费 robot_status 和 history 两条初始消息。
+        with client.websocket_connect(f"/ws/chat?token={token}") as ws:
+            first_history = recv_initial_status(ws)
+            session_id = first_history["session_id"]
+
+            ws.send_json({"type": "text", "content": "断线前的最后一句话"})
+            while True:
+                event = ws.receive_json()
+                if event["type"] == "done":
+                    break
+
+        with client.websocket_connect(f"/ws/chat?token={token}") as ws:
+            history = recv_initial_status(ws)
+            assert history["session_id"] == session_id
+            texts = [m["text"] for m in history["messages"]]
+            assert "断线前的最后一句话" in texts

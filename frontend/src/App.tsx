@@ -21,6 +21,7 @@ import {
 import {
   clearToken,
   getStoredToken,
+  isStoredTokenExpired,
   login,
   register,
 } from "./api/auth";
@@ -101,7 +102,9 @@ export default function App() {
   const token = getStoredToken();
 
   // ---------- 登录态 ----------
-  const [authed, setAuthed] = useState<boolean>(Boolean(token));
+  const [authed, setAuthed] = useState<boolean>(
+    Boolean(token) && !isStoredTokenExpired(),
+  );
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authForm, setAuthForm] = useState({ username: "", email: "", password: "" });
   const [authError, setAuthError] = useState("");
@@ -223,7 +226,10 @@ export default function App() {
         // token 失效，回到登录页
         clearToken();
         setAuthed(false);
+        return;
       }
+      // 非鉴权原因断开：ChatClient 会自动重连，这里把关闭码暴露出来便于定位
+      setNotice(`与后端断开（code ${code}），正在自动重连…`);
     },
     [],
   );
@@ -232,14 +238,23 @@ export default function App() {
   useEffect(() => {
     if (!authed) return;
     const currentToken = getStoredToken();
-    if (!currentToken) {
+    if (!currentToken || isStoredTokenExpired()) {
+      // token 缺失或已过期：清掉回到登录页，避免拿着旧 token 无限重连
+      clearToken();
       setAuthed(false);
       return;
     }
     const client = new ChatClient({
-      onOpen: () => setWsConnected(true),
+      onOpen: () => {
+        setWsConnected(true);
+        setNotice("");
+      },
       onClose: handleWsClose,
       onEvent: handleEvent,
+      onReconnecting: (attempt) => {
+        setWsConnected(false);
+        setNotice(`连接中断，正在自动重连（第 ${attempt} 次）…`);
+      },
     });
     client.connect(currentToken);
     clientRef.current = client;

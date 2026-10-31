@@ -13,7 +13,7 @@ import re
 from typing import Any, AsyncIterator
 
 from src.qiming.mllm.recognizer import MllmRecognizer
-from src.qiming.arm_control.status import status_hub
+from src.qiming.utils.async_utils import run_with_status_events
 from src.qiming.orchestrator.agents import (
     BaseAgent,
     ChatAgent,
@@ -41,9 +41,10 @@ class Orchestrator:
     ) -> None:
         self.recognizer = recognizer or MllmRecognizer()
         self.tool_registry = tool_registry or create_default_registry()
-        # 按意图类型（AGENT_MAP 的 key）索引子 Agent，分发时用意图直接查表
+        # 按意图类型（AGENT_MAP 的 key）索引子 Agent，分发时用意图直接查表；
+        # 工具注册表一同注入，供 Agent 通过 Function Calling 自主调用
         self.agents: dict[str, BaseAgent] = {
-            intent: agent_cls(recognizer=self.recognizer)
+            intent: agent_cls(recognizer=self.recognizer, tool_registry=self.tool_registry)
             for intent, agent_cls in AGENT_MAP.items()
         }
         # 闲聊兜底也复用 ChatAgent
@@ -83,38 +84,36 @@ class Orchestrator:
             "message": f"正在由 {agent.name} agent 处理…",
         }
 
+        # Agent 内部由模型自主决定调用哪些工具，这里只负责在动作执行期间
+        # 把机械臂状态实时转成事件，并在迭代结束后取回调用记录
         try:
-            result = await asyncio.to_thread(agent.run, user_text, self.history)
+            holder: dict[str, Any] = {}
+            async for event in run_with_status_events(
+                agent.run, holder, user_text, self.history
+            ):
+                yield event
+            result = holder["result"]
         except Exception as exc:  # noqa: BLE001
             yield {"type": "error", "message": f"{agent.name} agent 处理失败: {exc}"}
             yield {"type": "done"}
             return
 
-        # 子 Agent 产出结构化任务时，按步骤依次分发到对应的外部系统工具
-        task = result["task"]
-        tool_calls = self._tool_calls_for_task(task)
-        is_plan = bool(task and task.get("type") == "plan")
-        steps = task.get("steps", []) if is_plan else []
-
-        tool_results: list[dict] = []
-        for idx, (tool_name, tool_args) in enumerate(tool_calls, start=1):
-            if is_plan:
-                step = steps[idx - 1] if idx - 1 < len(steps) else {}
-                yield {
-                    "type": "step",
-                    "index": idx,
-                    "total": len(tool_calls),
-                    "action_type": step.get("action_type", ""),
-                    "target_object": step.get("target_object", ""),
-                    "message": step.get("reply", ""),
-                }
-            holder: dict[str, Any] = {}
-            async for event in self._run_tool_streaming(tool_name, tool_args, holder):
-                yield event
-            tool_results.append(holder["result"])
-            yield {"type": "tool_result", "tool": tool_name, **holder["result"]}
-
-        tool_result = tool_results if is_plan else (tool_results[0] if tool_results else None)
+        # 模型自主调用产生的工具结果，按调用顺序回传前端
+        traces: list[dict] = result.get("tool_traces") or []
+        tool_result = None
+        for trace in traces:
+            event: dict[str, Any] = {
+                "type": "tool_result",
+                "tool": trace.get("tool", ""),
+                "ok": bool(trace.get("ok")),
+            }
+            if trace.get("ok"):
+                event["result"] = trace.get("result")
+            else:
+                event["error"] = trace.get("error")
+            yield event
+        if traces:
+            tool_result = traces if len(traces) > 1 else traces[0]
 
         self.history.append({"role": "user", "text": user_text})
         self.history.append({"role": "agent", "text": result["message"]})
@@ -123,43 +122,10 @@ class Orchestrator:
             "type": "agent_result",
             "agent": agent.name,
             "message": result["message"],
-            "task": result["task"],
+            "task": result.get("task"),
             "tool_result": tool_result,
         }
         yield {"type": "done"}
-
-    async def _run_tool_streaming(self, name: str, args: dict[str, Any], holder: dict[str, Any]):
-        """在线程中执行工具，并把执行期间的机械臂状态实时 yield 出去。
-
-        状态由 ArmController 在子线程里写入 status_hub（见 arm_control/status.py）。
-        这里把子线程回调经事件循环队列转成事件流，前端「机械臂状态」卡片因此能在
-        动作进行中逐步更新，而不是等整个动作结束才一次性刷新。
-        工具返回值通过 holder["result"] 带回给调用方。
-        """
-        loop = asyncio.get_running_loop()
-        queue: asyncio.Queue = asyncio.Queue()
-        token = status_hub.subscribe(
-            lambda snapshot: loop.call_soon_threadsafe(queue.put_nowait, snapshot))
-
-        task = asyncio.create_task(
-            asyncio.to_thread(self.tool_registry.execute, name, args))
-        try:
-            while True:
-                getter = asyncio.create_task(queue.get())
-                done, _pending = await asyncio.wait(
-                    {getter, task}, return_when=asyncio.FIRST_COMPLETED)
-                if getter in done:
-                    yield {"type": "robot_status", **getter.result()}
-                    continue
-                # 工具已结束：取消这次等待，收尾后再补发残留状态
-                getter.cancel()
-                break
-
-            holder["result"] = await task
-            while not queue.empty():
-                yield {"type": "robot_status", **queue.get_nowait()}
-        finally:
-            status_hub.unsubscribe(token)
 
     def _recognize_intent(self, user_text: str) -> str:
         """调用 MLLM 做意图识别，返回意图字符串。"""
@@ -270,7 +236,9 @@ class MockOrchestrator(Orchestrator):
                     "message": step.get("reply", ""),
                 }
             holder: dict[str, Any] = {}
-            async for event in self._run_tool_streaming(tool_name, tool_args, holder):
+            async for event in run_with_status_events(
+                self.tool_registry.execute, holder, tool_name, tool_args
+            ):
                 yield event
             tool_results.append(holder["result"])
             yield {"type": "tool_result", "tool": tool_name, **holder["result"]}

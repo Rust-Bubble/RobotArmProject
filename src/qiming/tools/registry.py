@@ -20,7 +20,32 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Literal
+
+# JSON Schema 基础类型 -> Python 类型（用于生成 Function Calling 的 args_schema）
+_SCHEMA_TYPES: dict[str, Any] = {
+    "string": str,
+    "number": float,
+    "integer": int,
+    "boolean": bool,
+    "array": list,
+    "object": dict,
+}
+
+
+def _schema_to_model(tool_name: str, schema: dict[str, Any]):
+    """把工具注册时的 JSON Schema 转成 pydantic 模型，作为 Function Calling 参数结构。"""
+    from pydantic import create_model
+
+    required = set(schema.get("required", []))
+    fields: dict[str, Any] = {}
+    for key, prop in (schema.get("properties") or {}).items():
+        if "enum" in prop:
+            value_type: Any = Literal[tuple(prop["enum"])]  # type: ignore[valid-type]
+        else:
+            value_type = _SCHEMA_TYPES.get(prop.get("type"), str)
+        fields[key] = (value_type, ... if key in required else None)
+    return create_model(f"{tool_name}_Args", **fields)
 
 
 @dataclass
@@ -100,18 +125,42 @@ class ToolRegistry:
         """全部工具的 OpenAI tools 列表。"""
         return [t.to_openai_schema() for t in self._tools.values()]
 
-    def to_langchain_tools(self) -> list:
-        """转成 langchain StructuredTool，可直接传给 create_agent(tools=...)。"""
+    def to_langchain_tools(self, trace: list[dict[str, Any]] | None = None,
+                           names: tuple[str, ...] | list[str] | None = None) -> list:
+        """转成 langchain StructuredTool，可直接传给 create_agent(tools=...)。
+
+        :param trace: 传入列表时，每次调用追加 {"tool", "args", "ok", "result"/"error"}
+        :param names: 只导出这些工具（按 Agent 职责收窄权限），None 表示全部
+        """
         from langchain_core.tools import StructuredTool
 
-        return [
-            StructuredTool.from_function(
-                func=t.handler,
-                name=t.name,
-                description=t.description,
+        selected = [t for t in self._tools.values()
+                    if names is None or t.name in names]
+        tools = []
+        for tool in selected:
+            args_schema = _schema_to_model(tool.name, tool.parameters)
+
+            def _run(_name: str = tool.name, _trace=trace, **kwargs: Any) -> Any:
+                # pydantic 会把可选参数补成 None，未显式传值的应回落到函数默认值
+                actual = {k: v for k, v in kwargs.items() if v is not None}
+                result = self.execute(_name, actual)
+                if _trace is not None:
+                    _trace.append({"tool": _name, "args": actual, **result})
+                if not result.get("ok"):
+                    # 返回失败结构而不是抛异常：模型能看到具体原因并自行重试
+                    # （例如脚本名写错时改用 list_motion_scripts 返回的名称）
+                    return {"ok": False, "error": result.get("error")}
+                return result.get("result")
+
+            tools.append(
+                StructuredTool.from_function(
+                    func=_run,
+                    name=tool.name,
+                    description=tool.description,
+                    args_schema=args_schema,
+                )
             )
-            for t in self._tools.values()
-        ]
+        return tools
 
     # ---------- 执行 ----------
 
