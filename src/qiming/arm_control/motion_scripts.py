@@ -22,9 +22,11 @@ Pose = Tuple[float, float, float, float, float, float]
 class MotionStep:
     """脚本中的一步：移动到位姿，或开/合夹爪。"""
 
-    kind: str  # "move" | "open" | "close"
+    kind: str  # "move" | "joint" | "open" | "close" | "led"
     label: str
     pose: Pose | None = None
+    color: Tuple[int, int, int] | None = None  # kind == "led" 时的 RGB（0~255）
+    joint: Tuple[int, float] | None = None  # kind == "joint" 时的 (关节ID, 绝对角度)
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,10 @@ class MotionScript:
 
 def _move(label: str, pose: Pose) -> MotionStep:
     return MotionStep(kind="move", label=label, pose=pose)
+
+
+def _joint(joint_id: int, angle: float, label: str) -> MotionStep:
+    return MotionStep(kind="joint", label=label, joint=(joint_id, angle))
 
 
 def _open(label: str = "打开夹爪") -> MotionStep:
@@ -62,8 +68,14 @@ _SCRIPTS: List[MotionScript] = [
     MotionScript(
         name="gripper_test",
         label="夹爪开合",
-        description="仅测试夹爪：打开 -> 闭合 -> 打开，机械臂不移动。",
-        steps=(_open("打开夹爪"), _close(), _open("再次打开")),
+        description="仅测试夹爪与第六关节：只转动第 6 关节，夹爪开合，其余关节保持不动。",
+        steps=(
+            _open("打开夹爪"),
+            _joint(6, -30.0, "第六关节转到 -30 度"),
+            _close("闭合夹爪"),
+            _joint(6, 30.0, "第六关节转到 30 度"),
+            _open("再次打开"),
+        ),
     ),
     MotionScript(
         name="home_demo",

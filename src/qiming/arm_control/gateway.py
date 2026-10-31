@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """控制网关：接收外部系统下发的坐标指令，校验后稳定驱动机械臂或仿真器。
 
-设计目标（联调四）:
+设计目标:
     - 协议入口统一：一条 JSON 指令 = 一个动作，可来自 WebSocket / Function Calling；
     - 先校验后驱动：维度、类型、有限性、工作空间越界都直接拒绝并返回原因，
       不做静默裁剪，避免上层误判指令已完整执行；
@@ -37,7 +37,7 @@ _IDEMPOTENCY_CACHE_SIZE = 100
 
 @dataclass
 class GatewayStats:
-    """网关累计统计，供联调脚本 / 状态查询使用。"""
+    """网关累计统计，供测试脚本 / 状态查询使用。"""
 
     total: int = 0
     succeeded: int = 0

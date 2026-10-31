@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""联调一：前端语音流转至后端处理的稳定性测试脚本。
+"""前端语音流转至后端处理的稳定性测试脚本。
 
 模拟前端完整链路，对运行中的后端服务做端到端压测：
     REST 注册/登录拿 token -> WebSocket 连接 -> 连续发送多轮指令
@@ -197,7 +197,7 @@ async def test_new_session(token: str, result: StabilityResult) -> None:
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(description="前端语音流 -> 后端处理 稳定性联调脚本")
+    parser = argparse.ArgumentParser(description="前端语音流 -> 后端处理 稳定性测试脚本")
     parser.add_argument("--rounds", type=int, default=20, help="阶段一连续指令轮数（默认 20）")
     parser.add_argument("--host", default="127.0.0.1", help="后端地址（默认 127.0.0.1）")
     parser.add_argument("--port", type=int, default=8000, help="后端端口（默认 8000）")
@@ -208,7 +208,7 @@ async def main() -> int:
     WS_URL = f"ws://{args.host}:{args.port}/ws/chat"
 
     print("=" * 60)
-    print("联调一：前端语音流转至后端处理的稳定性测试")
+    print("前端语音流转至后端处理的稳定性测试")
     print(f"目标服务: {BASE_URL}")
     print("=" * 60)
 

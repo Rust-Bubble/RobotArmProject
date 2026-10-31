@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from src.qiming.arm_control.controller import ArmController
 from src.qiming.arm_control.gateway import CoordinateGateway
-from src.qiming.arm_control.motion_scripts import list_scripts
+from src.qiming.arm_control.motion_scripts import get_script, list_scripts
 from src.qiming.arm_control.pose_presets import (
     DEFAULT_PLACE_PRESET_NAME,
     DEFAULT_PRESET_NAME,
@@ -190,6 +190,52 @@ def create_default_registry() -> ToolRegistry:
         return get_coordinate_gateway().submit(command)
 
     @registry.tool(
+        name="set_gripper",
+        description="打开或闭合机械臂夹爪。由你根据用户意图选择 action 参数，可连续调用多次。",
+        parameters={
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["open", "close"],
+                    "description": "open 打开夹爪；close 闭合夹爪",
+                },
+            },
+            "required": ["action"],
+        },
+    )
+    def set_gripper(action: str) -> dict:
+        try:
+            return _get_arm_controller().set_gripper(action)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from None
+
+    @registry.tool(
+        name="set_led_color",
+        description=(
+            "设置机械臂灯板颜色。由你根据用户意图决定 RGB 三个通道的值，"
+            "例如红色 r=255,g=0,b=0，绿色 r=0,g=255,b=0，蓝色 r=0,g=0,b=255。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "r": {"type": "integer", "minimum": 0, "maximum": 255,
+                      "description": "红色通道 0~255"},
+                "g": {"type": "integer", "minimum": 0, "maximum": 255,
+                      "description": "绿色通道 0~255"},
+                "b": {"type": "integer", "minimum": 0, "maximum": 255,
+                      "description": "蓝色通道 0~255"},
+            },
+            "required": ["r", "g", "b"],
+        },
+    )
+    def set_led_color(r: int, g: int, b: int) -> dict:
+        try:
+            return _get_arm_controller().set_led_color(int(r), int(g), int(b))
+        except ValueError as exc:
+            raise ValueError(str(exc)) from None
+
+    @registry.tool(
         name="list_motion_scripts",
         description="列出所有预设机械臂运动脚本（不含视觉，只有运动与夹爪开合）。",
         parameters={"type": "object", "properties": {}, "required": []},
@@ -217,6 +263,8 @@ def create_default_registry() -> ToolRegistry:
     )
     def run_motion_script(name: str) -> dict:
         try:
+            # 先校验脚本名，避免参数错误时也初始化真实机械臂
+            get_script(name)
             return _get_arm_controller().run_motion_script(name)
         except KeyError as exc:
             # 转成模型/用户可读的参数错误

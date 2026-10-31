@@ -21,6 +21,15 @@ class MyCobotDriver:
         # 同步运动等待超时（sync_send_coords/sync_send_angles 的 timeout 参数）
         self.move_timeout = robot_cfg.get("move_timeout", 15)
         self.gripper_config = robot_cfg.get("gripper", {})
+        # 夹爪驱动方式：pneumatic - 气动夹爪（底座 IO）；electric - 电动夹爪
+        self.gripper_kind = self.gripper_config.get("kind", "electric")
+        pneumatic_cfg = self.gripper_config.get("pneumatic", {})
+        self.gripper_pins = list(pneumatic_cfg.get("pins", [1, 2]))
+        self.gripper_open_levels = list(pneumatic_cfg.get("open_levels", [1, 0]))
+        self.gripper_close_levels = list(pneumatic_cfg.get("close_levels", [0, 1]))
+        self.gripper_hold_seconds = pneumatic_cfg.get("hold_seconds", 1.0)
+        # 官方例程中两个引脚的写入之间要有 1 秒间隔，否则电磁阀不动作
+        self.gripper_step_delay_seconds = pneumatic_cfg.get("step_delay_seconds", 1.0)
         # 夹爪类型：1 自适应（默认）/ 2 五指灵巧手 / 3 平行 / 4 柔性
         self.gripper_type = self.gripper_config.get("type", 1)
         self.gripper_open_value = self.gripper_config.get("open_value", 80)
@@ -132,6 +141,18 @@ class MyCobotDriver:
             print(f"[机械臂] 关节移动失败({e})，回退到异步 send_angles")
             self.mc.send_angles(list(joints), speed)
 
+    def move_joint(self, joint_id: int, angle: float, speed: int = None) -> None:
+        """只改变指定关节的绝对角度，其余关节保持当前角度。"""
+        if self.mc is None:
+            print(f"[机械臂] 未连接，跳过第 {joint_id} 关节移动")
+            return
+        self._check_error()
+        current = self.get_angles()
+        target = list(current)
+        target[int(joint_id) - 1] = float(angle)
+        print(f"[机械臂] 第 {joint_id} 关节 -> {angle} 度（其余关节保持当前角度）")
+        self.move_to_joints(target, speed)
+
     def move_to_by_ik(self, pose: Pose, speed: int = None) -> bool:
         """先做逆运动学转换，再以关节角度方式移动。"""
         joints = self.pose_to_joints(pose)
@@ -143,16 +164,43 @@ class MyCobotDriver:
         return True
 
     def _init_gripper(self) -> None:
-        """夹爪初始化：透明传输模式 + 电动夹爪初始化（插入/移除夹爪后需初始化一次）。"""
+        """电动夹爪初始化：透明传输模式 + 电动夹爪初始化（插入/移除夹爪后需初始化一次）。
+
+        气动夹爪通过底座 IO 控制，不需要也不应该切换透传模式。
+        """
+        if self.gripper_kind == "pneumatic":
+            return
         self.mc.set_gripper_mode(0)
         try:
             self.mc.init_electric_gripper()
         except Exception as e:
             print(f"[机械臂] 夹爪初始化失败: {e}")
 
+    def _set_pneumatic(self, levels: list[int]) -> None:
+        """按引脚电平驱动气动夹爪（mc.set_basic_output）。
+
+        与官方例程一致：每个引脚写入之间留间隔，否则电磁阀不会动作。
+        """
+        if len(levels) < len(self.gripper_pins):
+            raise ValueError(
+                f"气动夹爪电平配置不足：pins={self.gripper_pins}, levels={levels}")
+        for index, (pin, level) in enumerate(zip(self.gripper_pins, levels)):
+            self.mc.set_basic_output(int(pin), int(level))
+            if index < len(self.gripper_pins) - 1:
+                time.sleep(self.gripper_step_delay_seconds)
+        time.sleep(self.gripper_hold_seconds)
+
     def open_gripper(self) -> None:
         if self.mc is None:
             print("[机械臂] 未连接，跳过打开夹爪")
+            return
+        if self.gripper_kind == "pneumatic":
+            try:
+                self._set_pneumatic(self.gripper_open_levels)
+                print(f"[机械臂] 打开气动夹爪（pins={self.gripper_pins}, "
+                      f"levels={self.gripper_open_levels}）")
+            except Exception as e:
+                print(f"打开气动夹爪失败: {e}")
             return
         try:
             self._init_gripper()
@@ -172,6 +220,14 @@ class MyCobotDriver:
         if self.mc is None:
             print("[机械臂] 未连接，跳过闭合夹爪")
             return
+        if self.gripper_kind == "pneumatic":
+            try:
+                self._set_pneumatic(self.gripper_close_levels)
+                print(f"[机械臂] 闭合气动夹爪（pins={self.gripper_pins}, "
+                      f"levels={self.gripper_close_levels}）")
+            except Exception as e:
+                print(f"闭合气动夹爪失败: {e}")
+            return
         try:
             self._init_gripper()
             self.mc.set_gripper_value(
@@ -184,6 +240,17 @@ class MyCobotDriver:
                 self.mc.set_gripper_state(1, self.gripper_close_speed, self.gripper_type)
             except Exception as e2:
                 print(f"闭合夹爪仍失败: {e2}")
+
+    def set_led_color(self, r: int, g: int, b: int) -> None:
+        """设置机械臂顶部灯板颜色（各通道 0~255）。"""
+        if self.mc is None:
+            print("[机械臂] 未连接，跳过灯板变色")
+            return
+        try:
+            self.mc.set_color(int(r), int(g), int(b))
+            print(f"[机械臂] 灯板颜色设置为 RGB({r}, {g}, {b})")
+        except Exception as e:
+            print(f"[机械臂] 灯板变色失败: {e}")
 
     def get_end2base_matrix(self, use_actual_robot=True):
         def euler_to_rotation_matrix(rx, ry, rz, degrees=True):
@@ -239,6 +306,15 @@ class MyCobotDriver:
         if self.mc is None:
             print("[机械臂] 未连接，跳过夹爪测试")
             return False
+        if self.gripper_kind == "pneumatic":
+            try:
+                for _ in range(2):
+                    self.close_gripper()
+                    self.open_gripper()
+                return True
+            except Exception as e:
+                print(f"夹爪测试错误: {str(e)}")
+                return False
         try:
             self._init_gripper()
 

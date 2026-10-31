@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""联调四：接收控制网关坐标指令并稳定驱动机械臂/仿真器。
+"""接收控制网关坐标指令并稳定驱动机械臂/仿真器。
 
 对运行中的后端做端到端验收，覆盖：
     1. 合法坐标指令（move / grasp）能被接收并成功执行；
@@ -60,7 +60,7 @@ class Result:
 
     def summary(self) -> bool:
         print("\n" + "=" * 60)
-        print("联调四报告：坐标指令网关")
+        print("坐标指令网关测试报告")
         print("=" * 60)
         print(f"通过检查项: {self.passed}    失败检查项: {self.failed}")
         for item in self.failures:
@@ -109,7 +109,7 @@ async def send_text(ws, content: str) -> None:
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(description="联调四：坐标指令网关稳定性联调")
+    parser = argparse.ArgumentParser(description="坐标指令网关稳定性测试")
     parser.add_argument("--rounds", type=int, default=20, help="合法指令连续下发轮数（默认 20）")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
@@ -120,7 +120,7 @@ async def main() -> int:
     WS_URL = f"ws://{args.host}:{args.port}/ws/chat"
 
     print("=" * 60)
-    print("联调四：接收控制网关坐标指令并稳定驱动机械臂/仿真器")
+    print("接收控制网关坐标指令并稳定驱动机械臂/仿真器")
     print(f"目标服务: {BASE_URL}")
     print("=" * 60)
 

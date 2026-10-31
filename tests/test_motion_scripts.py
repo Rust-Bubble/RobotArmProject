@@ -19,11 +19,17 @@ class RecordingDriver:
     def move_to(self, pose) -> None:
         self.calls.append(("move", tuple(round(float(v), 3) for v in pose)))
 
+    def move_joint(self, joint_id, angle) -> None:
+        self.calls.append(("joint", int(joint_id), float(angle)))
+
     def open_gripper(self) -> None:
         self.calls.append(("open",))
 
     def close_gripper(self) -> None:
         self.calls.append(("close",))
+
+    def set_led_color(self, r, g, b) -> None:
+        self.calls.append(("led", int(r), int(g), int(b)))
 
 
 @pytest.fixture()
@@ -40,10 +46,16 @@ def test_all_scripts_are_valid():
     for script in scripts:
         assert script.steps, f"{script.name} 没有步骤"
         for step in script.steps:
-            assert step.kind in ("move", "open", "close")
+            assert step.kind in ("move", "joint", "open", "close", "led")
             if step.kind == "move":
                 assert step.pose is not None
                 validate_pose(step.pose, step.label)
+            if step.kind == "joint":
+                assert step.joint is not None
+                assert 1 <= step.joint[0] <= 6
+            if step.kind == "led":
+                assert step.color is not None
+                assert all(0 <= c <= 255 for c in step.color)
 
 
 def test_script_names_unique():
@@ -58,14 +70,37 @@ def test_get_script_unknown_raises():
 
 def test_run_motion_script_executes_steps(driver):
     controller = ArmController(driver, {})
-    script = get_script("gripper_test")
+    script = get_script("home_demo")
 
-    result = controller.run_motion_script("gripper_test")
+    result = controller.run_motion_script("home_demo")
 
-    assert result["script"] == "gripper_test"
+    assert result["script"] == "home_demo"
     assert result["steps"] == len(script.steps)
-    assert [c[0] for c in driver.calls] == ["open", "close", "open"]
+    assert [c[0] for c in driver.calls] == ["move"]
     assert status_hub.snapshot()["state"] == "idle"
+
+
+def test_set_gripper_by_agent_params(driver):
+    """夹爪开合由 Agent 传入 action 决定，不再依赖固定脚本。"""
+    controller = ArmController(driver, {})
+
+    assert controller.set_gripper("open")["action"] == "open"
+    assert controller.set_gripper("close")["action"] == "close"
+    assert [c[0] for c in driver.calls] == ["open", "close"]
+
+    with pytest.raises(ValueError):
+        controller.set_gripper("toggle")
+
+
+def test_set_led_color_by_agent_params(driver):
+    """灯板颜色由 Agent 传入 RGB 决定，不再依赖固定脚本。"""
+    controller = ArmController(driver, {})
+
+    assert controller.set_led_color(255, 165, 0)["r"] == 255
+    assert driver.calls == [("led", 255, 165, 0)]
+
+    with pytest.raises(ValueError):
+        controller.set_led_color(300, 0, 0)
 
 
 def test_run_motion_script_moves_in_order(driver):
@@ -87,7 +122,7 @@ def test_tools_registered_and_list_works(driver):
     listed = reg.execute("list_motion_scripts", {})
     assert listed["ok"] is True
     names = [item["name"] for item in listed["result"]]
-    assert "gripper_test" in names and "wave_demo" in names
+    assert "home_demo" in names and "wave_demo" in names
 
 
 def test_run_tool_unknown_script_returns_error(driver):
