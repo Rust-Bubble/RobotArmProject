@@ -1,9 +1,9 @@
-# 全局上下文管理 (Memory) 与联调一：语音流转后端稳定性测试
+# 全局上下文管理 (Memory) 与语音流转后端稳定性测试
 
 本文档说明两部分工作的设计与自测方法：
 
 1. 系统运行全局上下文管理 (Memory) 与持久化存储
-2. 联调一：前端语音流转至后端处理的稳定性测试
+2. 前端语音流转至后端处理的稳定性测试
 
 ---
 
@@ -67,7 +67,7 @@ SQLite / PostgreSQL
 
 ---
 
-## 二、联调一：稳定性测试
+## 二、稳定性测试
 
 "前端语音流转至后端"链路 = 浏览器语音识别产出文本 → WebSocket 发送 →
 后端意图识别 → Agent 处理 → 工具执行 → 事件流回传。稳定性测试覆盖三层：
@@ -83,7 +83,7 @@ SQLite / PostgreSQL
 ./robot-arm-env/Scripts/python.exe -m pytest tests/ -v
 ```
 
-### 2.2 端到端联调脚本（对真实运行的后端压测）
+### 2.2 端到端测试脚本（对真实运行的后端压测）
 
 [scripts/stability_test.py](../scripts/stability_test.py) 模拟前端完整链路：
 REST 注册/登录 → WebSocket 连接 → 连续多轮指令（混合三种意图）→ 断线重连
@@ -93,11 +93,11 @@ REST 注册/登录 → WebSocket 连接 → 连续多轮指令（混合三种意
 # 终端 1：启动后端
 ./robot-arm-env/Scripts/python.exe -m uvicorn src.api.app:app --port 8000
 
-# 终端 2：运行联调脚本
+# 终端 2：运行测试脚本
 ./robot-arm-env/Scripts/python.exe scripts/stability_test.py --rounds 20
 ```
 
-### 2.3 手动联调（前端页面）
+### 2.3 手动测试（前端页面）
 
 ```powershell
 # 终端 1：后端

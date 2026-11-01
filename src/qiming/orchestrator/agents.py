@@ -127,6 +127,8 @@ class ChatAgent(BaseAgent):
     - 预设运动脚本（不含视觉，只有运动与夹爪开合），列表由 list_motion_scripts 工具返回
     - execute_grasp：抓取物体并递送到用户手边
     - execute_coords：按坐标移动，或在指定坐标抓取递送
+    - set_gripper：打开或闭合夹爪
+    - set_led_color：按 RGB 设置灯板颜色
     - query_robot_status：查询机械臂工作状态
     - emergency_stop：紧急停止
     - reset_system：软件复位
@@ -151,11 +153,17 @@ class DecomposeAgent(BaseAgent):
 
     name = "decompose"
     model = "qwen3-vl-plus"  # 多步工具编排对模型能力要求较高，使用更强模型
-    tool_names = ("execute_grasp", "execute_coords", "list_motion_scripts", "run_motion_script")
+    tool_names = (
+        "execute_grasp", "execute_coords", "set_gripper", "set_led_color",
+        "list_motion_scripts", "run_motion_script")
     system_prompt = """
     #身份
     你是智能机械臂系统的动作规划智能体，可以直接调用机械臂工具完成任务。
     #可用工具
+    - set_gripper: 打开或闭合夹爪，参数 action 由你判断：open 打开 / close 闭合。
+      用户说"夹爪开合"时，按其语义决定先开后合或先合后开，必要时连续调用多次。
+    - set_led_color: 设置灯板颜色，参数 r/g/b 由你根据用户描述的颜色自行换算为 0~255。
+      例如红色 255,0,0；绿色 0,255,0；蓝色 0,0,255；白色 255,255,255；橙色 255,165,0。
     - list_motion_scripts: 列出所有预设运动脚本（不含视觉，只有运动和夹爪开合）。
     - run_motion_script: 按名称执行预设运动脚本。参数 name 必填；
       不确定名称时先调用 list_motion_scripts 获取。
@@ -163,13 +171,16 @@ class DecomposeAgent(BaseAgent):
     - execute_coords: 按坐标指令执行动作。action=move 移动到坐标；
       action=grasp 在指定坐标抓取并递送；pick_pose 为 [x, y, z, rx, ry, rz]。
     #指令
-    1. 用户点名某个预设脚本（如"挥手""回位""抓取放置演示""方形轨迹""夹爪开合"）时，
+    1. 用户要求打开/闭合夹爪时，调用 set_gripper，不要使用预设脚本。
+    2. 用户要求改变灯板/灯光颜色时，调用 set_led_color，RGB 参数由你自己换算；
+       用户要求依次变换多种颜色时，按顺序连续调用多次。
+    3. 用户点名某个预设脚本（如"挥手""回位""抓取放置演示""方形轨迹"）时，
        调用 run_motion_script 执行，不要自己编造路径。
-    2. 用户说"随便执行一个/演示一下"时，先列出脚本，再选一个执行。
-    3. 用户要求操作多个物品时，必须逐个调用工具，处理完一个再处理下一个，
+    4. 用户说"随便执行一个/演示一下"时，先列出脚本，再选一个执行。
+    5. 用户要求操作多个物品时，必须逐个调用工具，处理完一个再处理下一个，
        全部完成后才允许输出最终回复；严禁中途回复"已完成"。
-    4. 只有无法映射到任何工具时，才直接回复文本说明无法执行。
-    5. 调用工具后，用一句简短的中文告诉用户执行结果。
+    6. 只有无法映射到任何工具时，才直接回复文本说明无法执行。
+    7. 调用工具后，用一句简短的中文告诉用户执行结果。
     """
 
     def run(self, user_text: str, history: list[dict]) -> dict:
@@ -203,7 +214,6 @@ class SystemAgent(BaseAgent):
     #指令
     1. 用户要求查询状态、停止、复位时，调用对应工具，不要凭空回答状态。
     2. 调用工具后，用一句简短的中文向用户说明结果。
-    3. 目前系统处于联调阶段，除上述工具外没有其它硬件能力。
     """
 
     def run(self, user_text: str, history: list[dict]) -> dict:

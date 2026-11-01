@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from src.qiming.arm_control.driver import ArmDriver
 from src.qiming.arm_control.grasp import GraspFlow
 from src.qiming.arm_control.mock_driver import MockArmDriver
@@ -13,6 +15,11 @@ from src.qiming.arm_control.pose_presets import (
 )
 from src.qiming.arm_control.status import status_hub
 from src.qiming.models import ArmAction
+
+# 灯板变色脚本中每种颜色的停留时间（秒）
+LED_HOLD_SECONDS = 3.0
+# 相邻机械臂动作之间的间隔（秒），避免连续动作过快
+MOTION_INTERVAL_SECONDS = 1.0
 
 
 class ArmController:
@@ -67,6 +74,41 @@ class ArmController:
         self.driver.open_gripper()
         status_hub.update(state="estop", phase="已急停", target="")
 
+    def set_gripper(self, action: str) -> dict:
+        """按 Agent 指定的动作开合夹爪（不依赖预设脚本）。
+
+        参数:
+            action: "open" 打开夹爪 / "close" 闭合夹爪
+        """
+        if action not in ("open", "close"):
+            raise ValueError(f"不支持的夹爪动作：{action}，仅支持 open / close")
+        label = "打开夹爪" if action == "open" else "闭合夹爪"
+        status_hub.update(state="busy", target="夹爪", phase=label)
+        try:
+            if action == "open":
+                self.driver.open_gripper()
+            else:
+                self.driver.close_gripper()
+        except Exception:  # noqa: BLE001
+            status_hub.update(state="idle", phase="执行中断", target="")
+            raise
+        status_hub.update(state="idle", phase="任务完成", target="")
+        return {"action": action, "message": "夹爪已打开" if action == "open" else "夹爪已闭合"}
+
+    def set_led_color(self, r: int, g: int, b: int) -> dict:
+        """按 Agent 传入的 RGB 设置灯板颜色。"""
+        for value in (r, g, b):
+            if not 0 <= value <= 255:
+                raise ValueError(f"RGB 取值必须在 0~255 之间，收到 {r},{g},{b}")
+        status_hub.update(state="busy", target="灯板", phase=f"灯板变色 RGB({r},{g},{b})")
+        try:
+            self.driver.set_led_color(r, g, b)
+        except Exception:  # noqa: BLE001
+            status_hub.update(state="idle", phase="执行中断", target="")
+            raise
+        status_hub.update(state="idle", phase="任务完成", target="")
+        return {"r": r, "g": g, "b": b, "message": f"灯板颜色已设置为 RGB({r}, {g}, {b})"}
+
     def run_motion_script(self, name: str) -> dict:
         """执行预设运动脚本（纯运动与夹爪开合，不依赖视觉）。
 
@@ -83,10 +125,17 @@ class ArmController:
                 status_hub.update(phase=step.label)
                 if step.kind == "move" and step.pose is not None:
                     self.driver.move_to(step.pose)
+                elif step.kind == "joint" and step.joint is not None:
+                    self.driver.move_joint(*step.joint)
                 elif step.kind == "open":
                     self.driver.open_gripper()
                 elif step.kind == "close":
                     self.driver.close_gripper()
+                elif step.kind == "led" and step.color is not None:
+                    self.driver.set_led_color(*step.color)
+                    time.sleep(LED_HOLD_SECONDS)
+                if step.kind != "led":
+                    time.sleep(MOTION_INTERVAL_SECONDS)
         except Exception:  # noqa: BLE001
             status_hub.update(state="idle", phase="执行中断", target="")
             raise

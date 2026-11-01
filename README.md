@@ -31,7 +31,7 @@ src/
 
 scripts/
   demo_text_command.py    文本模拟语音指令
-  stability_test.py       联调一：语音流转后端稳定性测试
+  stability_test.py       稳定性测试：语音流转后端稳定性测试
 ```
 
 ## 当前运行方式
@@ -48,7 +48,7 @@ python -m src.main --text "帮我拿桌上的水杯"
 # 启动后端
 ./robot-arm-env/Scripts/python.exe -m uvicorn src.api.app:app --port 8000
 
-# 另开终端，运行联调一稳定性测试（前端语音流 -> 后端处理）
+# 另开终端，运行稳定性测试（前端语音流 -> 后端处理）
 ./robot-arm-env/Scripts/python.exe scripts/stability_test.py --rounds 20
 
 # 运行单元/集成测试
