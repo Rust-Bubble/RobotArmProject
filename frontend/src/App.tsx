@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AudioLines,
   Bot,
+  CameraOff,
   CircleStop,
   Cpu,
   LogOut,
@@ -25,6 +26,7 @@ import {
   login,
   register,
 } from "./api/auth";
+import { fetchCalibrationStatus, type CalibrationStatus } from "./api/vision";
 
 interface Message {
   id: number;
@@ -118,6 +120,7 @@ export default function App() {
   const [task, setTask] = useState<TaskInfo>(EMPTY_TASK);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [robot, setRobot] = useState<RobotStatus>(EMPTY_ROBOT);
+  const [calibration, setCalibration] = useState<CalibrationStatus | null>(null);
 
   const clientRef = useRef<ChatClient | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
@@ -264,6 +267,24 @@ export default function App() {
     };
   }, [authed, handleEvent, handleWsClose]);
 
+  // 登录后查询一次手眼标定状态（只读，来源 config/robot.yaml）
+  useEffect(() => {
+    if (!authed) return;
+    const currentToken = getStoredToken();
+    if (!currentToken) return;
+    let cancelled = false;
+    fetchCalibrationStatus(currentToken)
+      .then((status) => {
+        if (!cancelled) setCalibration(status);
+      })
+      .catch(() => {
+        if (!cancelled) setCalibration(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authed]);
+
   // 对话流自动滚动到底部
   useEffect(() => {
     streamRef.current?.scrollTo({ top: streamRef.current.scrollHeight });
@@ -300,6 +321,7 @@ export default function App() {
     setEvents([]);
     setTask(EMPTY_TASK);
     setRobot(EMPTY_ROBOT);
+    setCalibration(null);
     setWsConnected(false);
   };
 
@@ -640,6 +662,50 @@ export default function App() {
                 <div>
                   <dt>目标物体</dt>
                   <dd>{robot.target || "—"}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section className="console-section vision-card">
+              <div className="section-label">
+                <span>视觉识别</span>
+                <small>相机未接入</small>
+              </div>
+
+              <div
+                className="vision-viewport"
+                role="img"
+                aria-label="摄像头预览占位，相机未接入"
+              >
+                <span className="vision-placeholder">
+                  <CameraOff size={22} />
+                  <strong>相机未接入</strong>
+                  <small>接入摄像头后，此处显示实时画面与识别框</small>
+                </span>
+              </div>
+
+              <dl className="task-fields">
+                <div>
+                  <dt>手眼标定</dt>
+                  <dd
+                    className={
+                      calibration?.hand_eye_calibrated ? "vision-ok" : "vision-todo"
+                    }
+                  >
+                    {calibration ? (calibration.hand_eye_calibrated ? "已标定" : "未标定") : "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>目标物体</dt>
+                  <dd>—</dd>
+                </div>
+                <div>
+                  <dt>像素坐标</dt>
+                  <dd>—</dd>
+                </div>
+                <div>
+                  <dt>机械臂坐标</dt>
+                  <dd>—</dd>
                 </div>
               </dl>
             </section>
