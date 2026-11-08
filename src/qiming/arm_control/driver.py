@@ -11,6 +11,9 @@ class ArmDriver(Protocol):
     def move_to(self, pose: Pose) -> None:
         ...
 
+    def move_joint(self, joint_id: int, angle: float) -> None:
+        ...
+
     def open_gripper(self) -> None:
         ...
 

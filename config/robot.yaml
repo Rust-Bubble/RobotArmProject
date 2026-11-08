@@ -1,17 +1,42 @@
 robot:
   model: "myCobot320PI"
-  mode: "mock"
+  mode: "real"
   port: "/dev/ttyAMA0"
-  baudrate: 1000000
+  # 实测该机械臂固件为 115200；pymycobot 默认的 PI_BAUD(1000000) 会导致读取全为 -1
+  baudrate: 115200
   default_speed: 35
+  # 坐标运动模式：1 直线运动（sync_send_coords 的 mode=1），0 非线性（默认）
+  # 本机实测 mode=1 时 wave_demo 会触发固件错误码 33（直线无相邻解）并阻塞到超时，故用 0
+  coord_mode: 0
+  # 同步发送坐标/角度后等待到位的超时时间（秒），超时后不再阻塞
+  move_timeout: 15
   handover_coords: [80.0, -220.0, 180.0, 0.0, 0.0, 0.0]
   # 抓取时使用的末端姿态预设，见 src/qiming/arm_control/pose_presets.py
   grasp_preset: "top_down"
   # 放置/递送时使用的末端姿态预设
   place_preset: "top_down_place"
   gripper:
-    open_value: 80
-    close_value: 20
+    # 夹爪类型：pneumatic - 气动夹爪（底座 IO 控制）；electric - 电动夹爪
+    kind: "pneumatic"
+    # 气动夹爪：通过 mc.set_basic_output 控制底座 OUT 引脚。
+    # pins 为底座 OUT 编号，open_levels/close_levels 为对应引脚电平。
+    # 官方例程为 OUT1/OUT2 互补输出（关闭：1=0、2=1；打开：1=1、2=0）
+    pneumatic:
+      pins: [1, 2]
+      open_levels: [1, 0]
+      close_levels: [0, 1]
+      # 每个引脚写入之间的间隔；官方例程为 1 秒，少了电磁阀可能不动作
+      step_delay_seconds: 1.0
+      # 每次开/合后等待气缸动作到位的时间（秒）
+      hold_seconds: 1.0
+    # 以下为电动夹爪参数（kind=electric 时生效）
+    # 夹爪类型：1 自适应 / 2 五指灵巧手 / 3 平行 / 4 柔性
+    type: 4
+    # 开合度（0~100）：本机柔性夹爪（type=4）数值越大越闭合，故打开取小值、闭合取大值
+    open_value: 20
+    close_value: 80
+    open_speed: 50
+    close_speed: 30
   # 逆运动学参数（改进 DH, 单位: deg / mm），留空则使用 kinematics.py 中的 myCobot 320 默认值
   kinematics:
     dh_params:

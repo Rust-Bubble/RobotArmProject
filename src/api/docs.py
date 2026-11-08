@@ -25,6 +25,10 @@ TAGS_METADATA = [
         "description": "用户注册 / 登录 / Token 刷新 / 当前用户信息。",
     },
     {
+        "name": "vision",
+        "description": "视觉与手眼标定状态的只读查询。",
+    },
+    {
         "name": "system",
         "description": "服务健康检查等系统级端点。",
     },

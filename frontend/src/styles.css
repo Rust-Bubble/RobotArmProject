@@ -508,6 +508,51 @@ a:focus-visible {
   margin-top: 13px;
 }
 
+/* ========== 视觉识别卡片 ========== */
+.vision-card .task-fields {
+  margin-top: 13px;
+}
+
+.vision-viewport {
+  position: relative;
+  margin-top: 17px;
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.vision-placeholder {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: #6f726c;
+  text-align: center;
+}
+
+.vision-placeholder strong {
+  color: #b9bab5;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.vision-placeholder small {
+  max-width: 190px;
+  font-size: 8px;
+  line-height: 1.55;
+}
+
+.vision-ok {
+  color: #8db45c;
+}
+
+.vision-todo {
+  color: #d59a4a;
+}
+
 .event-stream {
   margin-top: 17px;
 }

@@ -31,7 +31,7 @@ src/
 
 scripts/
   demo_text_command.py    文本模拟语音指令
-  stability_test.py       联调一：语音流转后端稳定性测试
+  stability_test.py       稳定性测试：语音流转后端稳定性测试
 ```
 
 ## 当前运行方式
@@ -58,6 +58,12 @@ $env:TTS_API_KEY = "replace-me"
 $env:TTS_MODEL = "gpt-4o-mini-tts"
 $env:TTS_VOICE = "alloy"
 python -m uvicorn src.api.app:app --reload --host 127.0.0.1 --port 8000
+
+# 另开终端，运行稳定性测试（前端语音流 -> 后端处理）
+python scripts/stability_test.py --rounds 20
+
+# 运行单元/集成测试
+python -m pytest tests/
 ```
 
 如果使用 `src/qiming/mllm/.env` 中已有的 DashScope 配置，TTS 会自动复用

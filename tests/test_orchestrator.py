@@ -220,7 +220,8 @@ class TestOrchestrator:
         assert events[1]["agent"] == "decompose"
         # DecomposeAgent 暴露机械臂动作类工具与预设脚本工具
         assert set(recognizer.last_tools) == {
-            "execute_grasp", "execute_coords", "list_motion_scripts", "run_motion_script"}
+            "execute_grasp", "execute_coords", "set_gripper", "set_led_color",
+            "list_motion_scripts", "run_motion_script"}
 
         tool_events = [e for e in events if e["type"] == "tool_result"]
         assert len(tool_events) == 2

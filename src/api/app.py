@@ -21,6 +21,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from src.api.auth import router as auth_router
 from src.api.chat import router as chat_router
 from src.api.docs import ERROR_RESPONSES, TAGS_METADATA, ErrorResponse
+from src.api.vision import router as vision_router
 from src.qiming.database.connection import db_manager
 from src.qiming.memory.manager import memory_manager
 from src.qiming.utils.logging import configure_logging
@@ -73,6 +74,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(chat_router)
+# 注册视觉/标定状态只读路由
+app.include_router(vision_router)
 
 
 # ---------- 中间件：请求日志 + 兜底异常捕获 ----------

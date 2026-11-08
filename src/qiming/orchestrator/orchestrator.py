@@ -183,7 +183,7 @@ class Orchestrator:
 
 
 class MockOrchestrator(Orchestrator):
-    """不走 MLLM 的本地调度器，用于联调和测试。
+    """不走 MLLM 的本地调度器，用于本地测试。
 
     通过 llm.yaml 的 mode: mock 或构造参数启用。
     """
@@ -218,7 +218,7 @@ class MockOrchestrator(Orchestrator):
             message = f"收到你的消息：{user_text}（mock 回复）"
             task = None
 
-        # mock 调度器同样走工具分发，保证全链路可联调
+        # mock 调度器同样走工具分发，保证全链路可测试
         tool_calls = self._tool_calls_for_task(task)
         is_plan = bool(task and task.get("type") == "plan")
         steps = task.get("steps", []) if is_plan else []
