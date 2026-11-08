@@ -44,8 +44,6 @@ async def lifespan(app: FastAPI):
         logger.exception("启动阶段初始化失败")
         raise
     yield
-    # 关闭时释放资源（对话记录已落库，进程内会话缓存直接清空即可）
-    await memory_manager.close()
     await db_manager.close()
     logger.info("服务已关闭")
 
@@ -65,9 +63,16 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# 注册认证路由
+app = FastAPI(title="启明智手 API", version="0.1.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
 app.include_router(auth_router)
-# 注册对话 WebSocket 路由（前端 <-> 大模型通信）
 app.include_router(chat_router)
 # 注册视觉/标定状态只读路由
 app.include_router(vision_router)
